@@ -1,2 +1,2 @@
-# specs
+# SpeCS
 SPARQL Query Containment Solver
