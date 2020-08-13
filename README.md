@@ -17,7 +17,8 @@ In order to compile SpeCS, the following tools have to be installed (check how t
 In order to execute SpeCS, Z3 solver has to be installed (https://github.com/Z3Prover/z3).
 
 # Building
-In the src folder, run the following command:
+> cd src
+
 > make
 
 # Execution
