@@ -1,0 +1,15 @@
+superquery:
+PREFIX : <http://www.example.org/>
+
+SELECT * WHERE { 
+   ?x :takesCourse "Course10" . ?x :takesCourse "Course20" . 
+}
+
+
+subquery:
+PREFIX : <http://www.example.org/>
+
+
+SELECT * WHERE { 
+   ?x :takesCourse "Course10" .
+}

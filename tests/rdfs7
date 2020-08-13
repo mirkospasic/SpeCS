@@ -1,0 +1,29 @@
+schema:
+PREFIX : <http://www.lehigh.edu//univ-bench.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+:GraduateStudent rdfs:subClassOf :Student .
+:UndergradStudent rdfs:subClassOf :Student .
+
+superquery:
+PREFIX : <http://www.lehigh.edu//univ-bench.owl#>
+
+SELECT ?x WHERE { 
+  ?x a :Student .
+  ?x :takesCourse ?y .
+  ?x :telephone ?tel .
+  ?x :sex "male" .
+  ?y :courseName "Course10" .
+}
+
+
+subquery:
+PREFIX : <http://www.lehigh.edu//univ-bench.owl#>
+
+SELECT ?x WHERE { 
+  ?x a :GraduateStudent .
+  ?x :takesCourse ?y .
+  ?x :telephone ?tel .
+  ?x :sex "male" .
+  ?y :courseName "Course10" .
+}

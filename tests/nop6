@@ -1,0 +1,17 @@
+superquery:
+PREFIX : <http://www.example.org/>
+
+SELECT * WHERE {
+	?x a :Professor .
+	?x :memeberOf ?y 
+}
+
+
+subquery:
+PREFIX : <http://www.example.org/>
+
+SELECT * WHERE {
+	?x a :Professor .
+	?x :graduatedFrom ?y .
+	?x :memeberOf ?y 
+}

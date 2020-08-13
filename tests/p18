@@ -1,0 +1,23 @@
+superquery:
+PREFIX : <http://www.example.org/>
+
+SELECT ?x ?y ?z ?r WHERE {
+	?x :subOrganizationOf ?y .
+	?y :subOrganizationOf ?z .
+	?z :subOrganizationOf ?r .
+}
+
+
+
+
+subquery:
+PREFIX : <http://www.example.org/>
+
+SELECT ?x ?y ?z ?r  WHERE {
+	?x :subOrganizationOf ?y .
+	?y :subOrganizationOf ?z .
+	?z :subOrganizationOf ?r .
+	?r :subOrganizationOf :Unibz .
+}
+
+

@@ -1,0 +1,16 @@
+superquery:
+PREFIX : <http://www.example.org/>
+
+SELECT * WHERE {
+	?x ?z ?y .
+}
+
+
+subquery:
+PREFIX : <http://www.example.org/>
+
+SELECT * WHERE {
+	?x a :Department .
+	?y a :University .
+	?x ?z ?y .
+}

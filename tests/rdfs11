@@ -1,0 +1,24 @@
+schema:
+PREFIX : <http://www.lehigh.edu//univ-bench.owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+:headOf rdfs:domain :Professor .
+:headOf rdfs:range :Department .
+
+superquery:
+PREFIX : <http://www.lehigh.edu//univ-bench.owl#>
+
+SELECT ?x   WHERE 
+{
+  ?x :headOf ?y .
+  ?x :worksFor ?y .
+}
+
+
+subquery:
+PREFIX : <http://www.lehigh.edu//univ-bench.owl#>
+
+SELECT ?x  WHERE 
+{
+  ?x :headOf ?y .
+}

@@ -1,0 +1,12 @@
+superquery:
+PREFIX : <http://www.example.org/>
+
+SELECT ?x ?y  WHERE {
+	?x :name ?y .
+}
+
+
+subquery:
+SELECT ?x ?y  WHERE {
+	?x ?z ?y 
+}

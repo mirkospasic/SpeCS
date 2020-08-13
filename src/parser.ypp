@@ -1,0 +1,575 @@
+%{
+
+  /* Syntax analyzer */
+
+  
+#include <string>
+#include "query.hpp"
+#include "rdf.hpp"
+using namespace std;
+
+#define YYDEBUG 1
+
+extern int yylex();
+void yyerror(string s);
+ 
+extern Query *subQuery;
+extern Query *superQuery;
+extern Query *schema;
+ 
+%}
+
+%union {
+  string *s;
+  Pattern *p;
+  RDFValue *v;
+  vector <RDFValue* > *v1;
+  vector <pair<RDFValue*, vector<RDFValue*> > > *v2;
+  vector <Expression*> *v3;
+  map<string, string> *m;
+  Query *q;
+  Expression *e;
+  int i;
+  pair<set<string>, set<string> > *ss;
+  pair<int, int> *pii;
+}
+
+%token select_token distinct_token where_token as_token union_token optional_token minus_token prefix_token schema_token superquery_token subquery_token limit_token from_token named_token order_by_token asc_token desc_token filter_token regex_token group_by_token and_token or_token graph_token builtin_str_token noteq_token bind_token round_token offset_token abs_token datatype_token values_token contains_token lcase_token is_literal_token is_uri_token bound_token
+%token <s> var_token iri_token str_token string_token blank_node_token
+%token <i> int_token
+
+%type <ss> DatasetClause
+%type <s> Prefix
+%type <p> GroupGraphPattern GroupGraphPatternSub GroupOrUnionGraphPattern GraphPatternNotTriples OptionalGraphPattern MinusGraphPattern TriplesSameSubjectPath TriplesBlock GroupGraphPatternSubS WhereClause Filter Bind SubSelect GraphGraphPattern
+%type <v> VarOrIri Verb VarOrTerm Object RDFLiteral Var IRIRef
+%type <v1> ObjectList ValuesClause DataBlockValue
+%type <v2> PropertyListPathNotEmpty
+%type <v3> Projections Selects SelectClause
+%type <m> PrefixDecl Decl
+%type <q> Query SuperQuery SubQuery
+%type <e> Projection Expression BuiltInCall
+%type <pii> LimitOffset
+
+%nonassoc '!'
+%left or_token
+%left and_token
+%left '<' '>' '=' noteq_token geq_token leq_token
+%left '+' '-'
+%left '*' '/'
+
+%%
+Program: Schema subquery_token SubQuery superquery_token SuperQuery {
+  subQuery = $3;
+  superQuery = $5;
+ }
+| Schema superquery_token SuperQuery subquery_token SubQuery {
+  subQuery = $5;
+  superQuery = $3;
+ }
+;
+
+Schema: schema_token Decl TriplesBlock {
+  schema = new Query(*$2, vector<Expression*>(), $3);
+  delete $2;
+ }
+| {
+  schema = nullptr;
+ }
+;
+
+SuperQuery: Query {
+  $$ = $1;
+ }
+;
+
+SubQuery: Query {
+  $$ = $1;
+ }
+;
+
+Query: Decl SelectClause DatasetClause WhereClause SolutionModifier LimitOffset ValuesClause {
+  RDFValue *v = nullptr;
+  vector<RDFValue*> values;
+  if ($7->size() > 0) {
+    v = (*$7)[0];
+    values = vector<RDFValue*>($7->begin() + 1, $7->end());
+  }
+  delete $7;
+  $$ = new Query(*$1, *$2, $4, *$3, $6->first, $6->second, v, values);
+  delete $1;
+  delete $2;
+  delete $3;
+  delete $6;
+ }
+;
+
+SubSelect: SelectClause WhereClause SolutionModifier {
+  Query *q = new Query(map<string, string>(), *$1, $2);
+  $$ = new SubqueryPattern(q);
+ }
+;
+
+Decl: PrefixDecl {
+  $$ = $1;
+ }
+;
+
+PrefixDecl: PrefixDecl prefix_token Prefix ':' iri_token {
+  $$ = $1;
+  (*$$)[*$3] = *$5;
+  delete $3;
+  delete $5;
+ }
+|  {
+  $$ = new map<string, string>();
+ }
+;
+
+Prefix: str_token {
+  $$ = $1;
+ }
+| {
+  $$ = new string("");
+ }
+;
+
+SelectClause: select_token DistinctClause Selects {
+  $$ = $3;
+}
+;
+
+DistinctClause: distinct_token {
+  // Ovo nista ne znaci kod set-semantike
+ }
+| {
+  // Ovo nista ne znaci kod set-semantike
+ }
+;
+
+Selects: Projections {
+  $$ = $1;
+ }
+| '*' {
+  $$ = new vector<Expression*>();
+ }
+;
+
+Projections: Projections Projection {
+  $$ = $1;
+  $$->push_back($2);
+ }
+| Projection {
+  $$ = new vector<Expression*>();
+  $$->push_back($1);
+ }
+;
+
+Projection: Var {
+  $$ = new PrimaryExpression((Variable*)$1);
+ }
+| '(' Expression as_token Var ')' {
+  $$ = new EqExpression(new PrimaryExpression($4), $2);
+  //$$ = new PrimaryExpression($4);
+ }
+;
+
+Var: var_token {
+  $$ = new Variable(*$1);
+  delete $1;
+ }
+;
+
+Expression: Expression '+' Expression {
+  $$ = new BuiltinBinExpression("f_add", $1, $3);
+  }
+| Expression '-' Expression {
+  $$ = new BuiltinBinExpression("f_sub", $1, $3);
+  }
+| Expression '*' Expression {
+  $$ = new BuiltinBinExpression("f_mul", $1, $3);
+  }
+| Expression '/' Expression {
+  $$ = new BuiltinBinExpression("f_div", $1, $3);
+  }
+| Expression '<' Expression {
+  $$ = new BuiltinBinExpression("f_lt", $1, $3);
+  }
+| Expression '>' Expression {
+  $$ = new BuiltinBinExpression("f_gt", $1, $3);
+  }
+| Expression '=' Expression {
+  $$ = new EqExpression($1, $3);
+  }
+| Expression geq_token Expression {
+  $$ = new BuiltinBinExpression("f_geq", $1, $3);
+  }
+| Expression leq_token Expression {
+  $$ = new BuiltinBinExpression("f_leq", $1, $3);
+  }
+| Expression noteq_token Expression {
+  $$ = new NotExpression(new EqExpression($1, $3));
+ }
+| Expression and_token Expression {
+  $$ = new AndExpression($1, $3);
+ }
+| Expression or_token Expression {
+  $$ = new OrExpression($1, $3);
+ }
+| '!' Expression {
+  $$ = new NotExpression($2);
+  }
+| '(' Expression ')' {
+  $$ = $2;
+  }
+| BuiltInCall {
+  $$ = $1;
+  }
+| Var {
+  $$ = new PrimaryExpression($1);
+  }
+| RDFLiteral {
+  $$ = new PrimaryExpression($1);
+  }
+| IRIRef '(' Expression ')' {
+  if (((IRI*)$1)->getIri() != "xsd:string")
+    throw "TODO: IRIRef(Expression)";
+  $$ = new BuiltinUnExpression("f_xsd_string", $3);
+  }
+| IRIRef {
+  $$ = new PrimaryExpression($1);
+  }
+;
+
+DatasetClause: DatasetClause from_token IRIRef {
+  $$ = $1;
+  $$->first.insert(((IRI*)$3)->getIri());
+  delete $3;
+}
+| DatasetClause from_token named_token IRIRef {
+  $$ = $1;
+  $$->second.insert(((IRI*)$4)->getIri());
+  delete $4;
+ }
+| {
+  $$ = new pair<set<string>, set<string> > ();
+ }
+;
+
+WhereClause: where_token GroupGraphPattern {
+  $$ = $2;
+ }
+;
+
+GroupGraphPattern: '{' GroupGraphPatternSub '}' {
+  $$ = $2;
+ }
+| '{' SubSelect '}' {
+  $$ = $2;
+  }
+;
+
+GroupGraphPatternSub: TriplesBlock GroupGraphPatternSubS {
+  $$ = $1;
+  addAddClausesToAdd($$, $2);
+ }
+;
+
+GroupGraphPatternSubS: GraphPatternNotTriples TriplesBlock GroupGraphPatternSubS {
+  And* tmp = dynamic_cast<And*>($1);
+  if (tmp != nullptr) {
+    $$ = $1;
+  }
+  else {
+    $$ = new And();
+    ((And*)$$)->addPattern($1);
+  }
+  addAddClausesToAdd($$, $2);
+  addAddClausesToAdd($$, $3);
+ }
+| {
+  $$ = new And();
+ }
+;
+
+
+TriplesBlock: TriplesBlock '.' TriplesSameSubjectPath {
+  $$ = $1;
+  addAddClausesToAdd($$, $3);
+ }
+| TriplesSameSubjectPath {
+  $$ = $1;
+ }
+;
+
+TriplesSameSubjectPath: VarOrTerm PropertyListPathNotEmpty {
+  $$ = new And();
+  for (auto a : *$2) {
+    for (auto b : a.second)
+      ((And*)$$)->addPattern(new TriplePattern($1->clone(), a.first, b));
+  }
+  delete $1;
+  delete $2;
+ }
+| {
+  $$ = new And();
+ }
+;
+
+VarOrTerm: VarOrIri {
+  $$ = $1;
+ }
+| RDFLiteral {
+  $$ = $1;
+ }
+;
+
+VarOrIri: var_token {
+  $$ = new Variable(*$1);
+  delete $1;
+ }
+| blank_node_token {
+  $$ = new BlankNode(*$1);
+  delete $1;
+  }
+| IRIRef {
+  $$ = $1;
+  }
+;
+
+IRIRef: iri_token {
+  $$ = new IRI(*$1);
+  delete $1;
+  }
+| Prefix ':' str_token {
+  $$ = new IRI(*$1 + ":" + *$3);
+  delete $1;
+  delete $3;
+  }
+;
+
+RDFLiteral: string_token {
+  $$ = new Literal(*$1);
+  delete $1;
+ }
+| int_token {
+  $$ = new Literal(to_string($1));
+  }
+;
+
+PropertyListPathNotEmpty: PropertyListPathNotEmpty ';' Verb ObjectList {
+  $$ = $1;
+  $$->push_back(make_pair($3, *$4));
+  delete $4;
+ }
+| Verb ObjectList {
+  $$ = new vector <pair<RDFValue*, vector<RDFValue*> > > ();
+  $$->push_back(make_pair($1, *$2));
+  delete $2;
+ }
+;
+
+Verb : VarOrIri {
+  $$ = $1;
+ }
+| 'a' {
+  $$ = new IRI("a");
+ }
+;
+
+ObjectList: ObjectList ',' Object {
+  $$ = $1;
+  $$->push_back($3);
+ }
+| Object {
+  $$ = new vector<RDFValue*>();
+  $$->push_back($1);
+ }
+;
+
+Object: VarOrTerm {
+  $$ = $1;
+ }
+;
+
+GraphPatternNotTriples: GroupOrUnionGraphPattern {
+  $$ = $1;
+ }
+| OptionalGraphPattern {
+  $$ = $1;
+ }
+| MinusGraphPattern {
+  $$ = $1;
+ }
+| Filter {
+  $$ = $1;
+  }
+| GraphGraphPattern {
+  $$ = $1;
+  }
+| Bind {
+  $$ = $1;
+  }
+;
+
+GroupOrUnionGraphPattern: GroupOrUnionGraphPattern union_token GroupGraphPattern {
+  Union* tmp = dynamic_cast<Union*>($1);
+  if (tmp != nullptr)
+    tmp->addPattern($3);
+  else {
+    tmp = new Union();
+    tmp->addPattern($1);
+    tmp->addPattern($3);
+  }
+  $$ = tmp;
+ }
+| GroupGraphPattern {
+  $$ = $1;
+ }
+;
+
+OptionalGraphPattern: optional_token GroupGraphPattern {
+  $$ = new OptionalPattern($2);
+}
+;
+
+MinusGraphPattern: minus_token GroupGraphPattern {
+  $$ = new MinusPattern($2);
+}
+;
+
+
+SolutionModifier:  order_by_token OrderList {
+  // Ovo nista ne znaci kod set-semantike
+}
+| group_by_token GroupConditions {
+  // ovo nista ne znaci bez agregatnih fja
+ }
+| {
+  //Nothing here
+  }
+;
+
+LimitOffset: limit_token int_token offset_token int_token {
+  $$ = new pair<int, int>($2, $4);
+ }
+| offset_token int_token limit_token int_token {
+  $$ = new pair<int, int>($4, $2);
+ }
+| limit_token int_token {
+  $$ = new pair<int, int>($2, -1);
+ }
+| offset_token int_token {
+  $$ = new pair<int, int>(-1, $2);
+ }
+|  {
+  $$ = new pair<int, int>(-1, -1);
+  }
+;
+
+OrderList: OrderList OrderElem {
+  //Nothing here
+ }
+| OrderElem {
+  //Nothing here
+ }
+;
+
+OrderElem: desc_token '(' var_token ')' {
+  // Ovo nista ne znaci kod set-semantike
+ }
+| asc_token '(' var_token ')' {
+  // Ovo nista ne znaci kod set-semantike
+ }
+| var_token {
+  // Ovo nista ne znaci kod set-semantike
+ }
+
+;
+Filter: filter_token '(' Expression ')' {
+  $$ = $3;
+ }
+| filter_token BuiltInCall {
+  $$ = $2;
+ }
+;
+
+GroupConditions: GroupConditions GroupCondition {
+  // ovo nista ne znaci bez agregatnih fja
+ }
+| GroupCondition {
+  // ovo nista ne znaci bez agregatnih fja
+  }
+;
+
+GroupCondition: var_token {
+  // ovo nista ne znaci bez agregatnih fja
+ }
+;
+
+BuiltInCall: regex_token '(' Expression ',' Expression ')' {
+  $$ = new BuiltinBinExpression("f_regex", $3, $5);
+}
+| regex_token '(' Expression ',' Expression ',' Expression ')' {
+  $$ = new BuiltinBinExpression("f_regex", $3, $5);
+  delete $7;
+}
+| builtin_str_token '(' Expression ')' {
+  $$ = new BuiltinUnExpression("f_str", $3);
+  }
+| round_token '(' Expression ')' {
+  $$ = new BuiltinUnExpression("f_round", $3);
+  }
+| abs_token '(' Expression ')' {
+  $$ = new BuiltinUnExpression("f_abs", $3);
+  }
+| datatype_token '(' Expression ')' {
+  $$ = new BuiltinUnExpression("f_datatype", $3);
+  }
+| contains_token '(' Expression ',' Expression ')' {
+  $$ = new BuiltinBinExpression("f_contains", $3, $5);
+  }
+| lcase_token '(' Expression ')' {
+  $$ = new BuiltinUnExpression("f_lcase", $3);
+  }
+| is_literal_token '(' Expression ')' {
+  $$ = new BuiltinUnExpression("f_isliteral", $3);
+  }
+| is_uri_token '(' Expression ')' {
+  $$ = new BuiltinUnExpression("f_isuri", $3);
+  }
+| bound_token '(' Var ')' {
+  $$ = new BuiltinUnExpression("f_bound", new PrimaryExpression($3));
+  }
+;
+
+GraphGraphPattern: graph_token VarOrIri GroupGraphPattern {
+  $$ = new GraphPattern($2, $3);
+}
+;
+
+Bind: bind_token '(' Expression as_token Var ')' {
+  $$ = new EqExpression(new PrimaryExpression($5), $3);
+ }
+;
+
+ValuesClause: values_token Var '{' DataBlockValue '}' {
+  $$ = new vector<RDFValue*>();
+  $$->push_back($2);
+  $$->insert($$->end(), $4->begin(), $4->end());
+}
+| {
+  $$ = new vector<RDFValue*>();
+}
+;
+
+DataBlockValue: DataBlockValue IRIRef {
+  $$ = $1;
+  $$->push_back($2);
+}
+| IRIRef {
+  $$ = new vector<RDFValue*>();
+  $$->push_back($1);
+ }
+;
+
+%%

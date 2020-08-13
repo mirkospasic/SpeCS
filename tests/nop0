@@ -1,0 +1,27 @@
+subquery:
+PREFIX : <http://www.example.org/>
+
+SELECT ?x
+FROM <nesto1>
+FROM <nesto2>
+WHERE { 
+   ?x :takesCourse "Course10" .
+   ?x :nesto1 ?a .
+   ?x :nesto2 ?b .
+}
+
+
+superquery:
+PREFIX : <http://www.example.org/>
+
+
+SELECT ?x
+FROM <nesto1>
+FROM <nesto2>
+WHERE { 
+   ?x :takesCourse "Course10" .
+   OPTIONAL {
+     ?x :nesto1 ?a .
+     ?x :nesto2 ?b .
+   }
+}
