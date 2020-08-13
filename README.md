@@ -6,3 +6,27 @@ The approach reduces the query containment problem to the satisfiability problem
 It covers the most common SPARQL language constructs (conjunctive and cyclic queries, union, filter, from clauses, blank nodes and projections, bind, subqueries, optional, graph, expressions within select clause, builtin functions, etc.) and reasoning under RDF SCHEMA entailment regime.
 The containment problem can be considered in both standard and subsumption form.
 Renaming of projection variables is also supported.
+
+# Prerequisites
+In order to compile SpeCS, the following tools have to be installed (check how to install them for your system):
+- make
+- g++
+- flex
+- bison
+In order to execute SpeCS, Z3 solver has to be installed (https://github.com/Z3Prover/z3).
+
+# Building
+In the src folder, run the following command:
+> make
+
+# Execution
+> ./specs -file path_to_file_with_2_sparql_queries [-rename]
+> ./specs -superquery q1 -subquery q2 [-schema sc] [-rename]
+
+The output 'unsat' means that query containment is present, while 'sat' means the oposite.
+
+# Test Examples
+In folder tests, you can find test cases from QCBench (http://sparql-qc-bench.inrialpes.fr/).
+
+
+
