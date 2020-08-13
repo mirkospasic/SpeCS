@@ -13,6 +13,7 @@ In order to compile SpeCS, the following tools have to be installed (check how t
 - g++
 - flex
 - bison
+
 In order to execute SpeCS, Z3 solver has to be installed (https://github.com/Z3Prover/z3).
 
 # Building
