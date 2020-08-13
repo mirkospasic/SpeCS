@@ -20,7 +20,9 @@ In the src folder, run the following command:
 > make
 
 # Execution
+
 > ./specs -file path_to_file_with_2_sparql_queries [-rename]
+
 > ./specs -superquery q1 -subquery q2 [-schema sc] [-rename]
 
 The output 'unsat' means that query containment is present, while 'sat' means the oposite.
