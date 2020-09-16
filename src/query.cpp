@@ -44,6 +44,7 @@ string tabs(unsigned i) {
   return res;
 }
 
+/*
 void addAddClausesToAdd(Pattern* p, Pattern* q) {
   if (((And*)q)->numberOfPatterns() != 0) {
     for (auto a : ((And*)q)->getPatterns())
@@ -53,7 +54,7 @@ void addAddClausesToAdd(Pattern* p, Pattern* q) {
     delete q;
   }
 }
-
+*/
 
 string OptionalPattern::formula(unsigned t, set<string> from, set<string> from_named) const {
   string res = tabs(t) + "(or \n";
@@ -77,6 +78,7 @@ string OptionalPattern::formula(unsigned t, set<string> from, set<string> from_n
 }
 
 string MinusPattern::formula(unsigned t, set<string> from, set<string> from_named) const {
+  /*
   string res = tabs(t);
   res += "(and \n";
   res += tabs(t+1) + "(not \n";
@@ -88,6 +90,21 @@ string MinusPattern::formula(unsigned t, set<string> from, set<string> from_name
     res += "(not (f_bound " + a + "))";
   res += "\n";
   res += tabs(t) + ")";
+  */
+  
+  string res = tabs(t);
+  res += "(forall (";
+  for (auto a : _optionalVariables)
+    res += "(" + a + " RDFValue)";
+  if (_optionalVariables.size() == 0)
+    res += "(foo_foo_foo RDFValue)";
+  res += ")\n";
+  
+  res += tabs(t+1) + "(not \n";
+  res += _p->formula(t+2, from, from_named) + "\n";
+  res += tabs(t+1) + ")\n";
+  res += tabs(t) + ")";
+  
   return res;
 }
 
@@ -170,7 +187,7 @@ string TriplePattern::formula(unsigned t, set<string> from, set<string> from_nam
   string res = tabs(t);
   if (from.size() == 1 && (*from.begin()) == "<default_graph>" && from_named.size() > 0)
     res += "false";
-  else {
+  else if (from.size() > 1) {
     res += "(or ";
     for (auto a : from)
       res += "(P " + _subject->getString() + " "
@@ -178,6 +195,12 @@ string TriplePattern::formula(unsigned t, set<string> from, set<string> from_nam
                    + _object->getString() + " "
                    + a + ") ";
     res += ")";
+  }
+  else {
+    res += "(P " + _subject->getString() + " "
+      + _predicate->getString() + " "
+      + _object->getString() + " "
+      + *from.begin() + ") ";
   }
   return res;
 }
@@ -287,7 +310,15 @@ string GraphPattern::formula(unsigned t, set<string> from, set<string> from_name
       res += "(exists ((<i_graph> RDFValue))\n";
       set<string> new_from;
       new_from.insert("<i_graph>");
-      string tmp = _p->formula(t + 1, new_from, from_named);
+      string tmp;
+      if (dynamic_cast<And*>(_p) == nullptr) {
+	And* aa = new And();
+	aa->addPattern(_p);
+	tmp = aa->formula(t + 1, new_from, from_named);
+      }
+      else {
+	tmp = _p->formula(t + 1, new_from, from_named);
+      }
       tmp = tmp.substr(0, tmp.size()-1) + tabs(t-1) + "(= " + v->getString() + " <i_graph>)\n" + tt + "\t)";
       res += tmp + "\n";
       res += tt + ")";
@@ -498,3 +529,100 @@ void generateVariationsWithoutRepetitions(vector<string> &arr, unsigned k, unsig
   }
 }
 
+Pattern* Union::normalize1() {
+  Union *tmp = new Union();
+  for (auto &p : _patterns) {
+    p = p->normalize1();
+    Union* u = dynamic_cast<Union*>(p);
+    if (u != nullptr) {
+      for (auto a : u->getPatterns())
+	tmp->addPattern(a);
+    }
+    else {
+      tmp->addPattern(p);
+    }
+  }
+  if (tmp->getPatterns().size() == 1)
+    return tmp->getPatterns()[0];
+  return tmp;
+}
+
+Pattern* And::normalize1() {
+  And *tmp = new And();
+  for (auto &p : _patterns) {
+    p = p->normalize1();
+    And* u = dynamic_cast<And*>(p);
+    if (u != nullptr) {
+      for (auto a : u->getPatterns())
+	tmp->addPattern(a);
+    }
+    else {
+      tmp->addPattern(p);
+    }
+  }
+  if (tmp->getPatterns().size() == 1)
+    return tmp->getPatterns()[0];
+  return tmp;
+}
+
+Pattern* OptionalPattern::normalize() {
+  Union* tmp = new Union();
+  tmp->addPattern(_p);
+  MinusPattern* minus = new MinusPattern(_p);
+  minus->setOptionalVariables(_optionalVariables);
+  tmp->addPattern(minus);
+  return tmp;
+}
+
+Pattern* Union::normalize() {
+  for (auto &p : _patterns)
+    p = p->normalize();
+  return this->normalize1();
+}
+
+Pattern* And::normalize() {
+  for (auto &p : _patterns)
+    p = p->normalize();
+
+  Pattern *tmp = _patterns[0];
+  for (unsigned i = 1; i < _patterns.size(); i++) {
+    Union* u0 = dynamic_cast<Union*>(tmp);
+    Union* u1 = dynamic_cast<Union*>(_patterns[i]);
+    if (u0 != nullptr && u1 != nullptr) {
+      tmp = new Union();
+      for (unsigned ii = 0; ii < u0->getPatterns().size(); ii++)
+	for (unsigned jj = 0; jj < u1->getPatterns().size(); jj++) {
+	  And *tmp1 = new And();
+	  tmp1->addPattern(u0->getPatterns()[ii]);
+	  tmp1->addPattern(u1->getPatterns()[jj]);
+	  ((Union*)tmp)->addPattern(tmp1);
+	}
+    }
+    else if (u0 == nullptr && u1 != nullptr) {
+      Union* tmp2 = new Union();
+      for (unsigned jj = 0; jj < u1->getPatterns().size(); jj++) {
+	And *tmp1 = new And();
+	tmp1->addPattern(tmp);
+	tmp1->addPattern(u1->getPatterns()[jj]);
+	((Union*)tmp2)->addPattern(tmp1);
+      }
+      tmp = tmp2;
+    }
+    else if (u0 != nullptr && u1 == nullptr) {
+      tmp = new Union();
+      for (unsigned ii = 0; ii < u0->getPatterns().size(); ii++) {
+	And *tmp1 = new And();
+	tmp1->addPattern(u0->getPatterns()[ii]);
+	tmp1->addPattern(_patterns[i]);
+	((Union*)tmp)->addPattern(tmp1);
+      }      
+    }
+    else if (u0 == nullptr && u1 == nullptr) {
+      And *tmp1 = new And();
+      tmp1->addPattern(tmp);
+      tmp1->addPattern(_patterns[i]);
+      tmp = tmp1;
+    }
+  }
+  return tmp->normalize1();
+}

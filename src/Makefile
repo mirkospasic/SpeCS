@@ -2,7 +2,7 @@ CPPFLAGS=-Wall
 
 specs: parser.tar.o lex.yy.o query.o main.o rdf.o
 	g++ $(CPPFLAGS) -o $@ $^
-main.o: main.cpp
+main.o: main.cpp query.hpp
 	g++ $(CPPFLAGS) -c -o $@ $<
 parser.tar.o: parser.tab.cpp
 	g++ $(CPPFLAGS) -c -o $@ $<

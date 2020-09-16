@@ -269,12 +269,29 @@ GroupGraphPattern: '{' GroupGraphPatternSub '}' {
 ;
 
 GroupGraphPatternSub: TriplesBlock GroupGraphPatternSubS {
+  /*
   $$ = $1;
   addAddClausesToAdd($$, $2);
+  */
+  if ($1 == nullptr && $2 == nullptr) {
+    $$ = nullptr;
+  }
+  else if ($1 == nullptr && $2 != nullptr) {
+    $$ = $2;
+  }
+  else if ($1 != nullptr && $2 == nullptr) {
+    $$ = $1;
+  }
+  else if ($1 != nullptr && $2 != nullptr) {
+    $$ = new And();
+    ((And*)$$)->addPattern($1);
+    ((And*)$$)->addPattern($2);
+  }
  }
 ;
 
 GroupGraphPatternSubS: GraphPatternNotTriples TriplesBlock GroupGraphPatternSubS {
+  /*
   And* tmp = dynamic_cast<And*>($1);
   if (tmp != nullptr) {
     $$ = $1;
@@ -285,16 +302,69 @@ GroupGraphPatternSubS: GraphPatternNotTriples TriplesBlock GroupGraphPatternSubS
   }
   addAddClausesToAdd($$, $2);
   addAddClausesToAdd($$, $3);
+  */
+  And *tmp = new And();
+  if ($1 == nullptr && $2 == nullptr && $3 == nullptr) {
+    $$ = nullptr;
+  }
+  else if ($1 == nullptr && $2 == nullptr && $3 != nullptr) {
+    $$ = $3;
+  }
+  else if ($1 == nullptr && $2 != nullptr && $3 == nullptr) {
+    $$ = $2;
+  }
+  else if ($1 == nullptr && $2 != nullptr && $3 != nullptr) {
+    tmp->addPattern($2);
+    tmp->addPattern($3);
+    $$ = tmp;
+  }
+  else if ($1 != nullptr && $2 == nullptr && $3 == nullptr) {
+    $$ = $1;
+  }
+  else if ($1 != nullptr && $2 == nullptr && $3 != nullptr) {
+    tmp->addPattern($1);
+    tmp->addPattern($3);
+    $$ = tmp;
+  }
+  else if ($1 != nullptr && $2 != nullptr && $3 == nullptr) {
+    tmp->addPattern($1);
+    tmp->addPattern($2);
+    $$ = tmp;
+  }
+  else if ($1 != nullptr && $2 != nullptr && $3 != nullptr) {
+    tmp->addPattern($1);
+    tmp->addPattern($2);
+    And *tmp1 = new And();
+    tmp1->addPattern(tmp);
+    tmp1->addPattern($3);
+    $$ = tmp1;
+  }
  }
 | {
-  $$ = new And();
+  $$ = nullptr;
  }
 ;
 
 
 TriplesBlock: TriplesBlock '.' TriplesSameSubjectPath {
+  /*
   $$ = $1;
   addAddClausesToAdd($$, $3);
+  */
+  if ($1 == nullptr  && $3 == nullptr) {
+    $$ = nullptr;
+  }
+  else if ($1 == nullptr  && $3 != nullptr) {
+    $$ = $3;
+  }
+  else if ($1 != nullptr  && $3 == nullptr) {
+    $$ = $1;
+  }
+  else if ($1 != nullptr  && $3 != nullptr) {
+    $$ = new And();
+    ((And*)$$)->addPattern($1);
+    ((And*)$$)->addPattern($3);
+  }
  }
 | TriplesSameSubjectPath {
   $$ = $1;
@@ -311,7 +381,7 @@ TriplesSameSubjectPath: VarOrTerm PropertyListPathNotEmpty {
   delete $2;
  }
 | {
-  $$ = new And();
+  $$ = nullptr;
  }
 ;
 
@@ -412,6 +482,7 @@ GraphPatternNotTriples: GroupOrUnionGraphPattern {
 ;
 
 GroupOrUnionGraphPattern: GroupOrUnionGraphPattern union_token GroupGraphPattern {
+  /*
   Union* tmp = dynamic_cast<Union*>($1);
   if (tmp != nullptr)
     tmp->addPattern($3);
@@ -421,6 +492,21 @@ GroupOrUnionGraphPattern: GroupOrUnionGraphPattern union_token GroupGraphPattern
     tmp->addPattern($3);
   }
   $$ = tmp;
+  */
+  if ($1 == nullptr && $3 == nullptr) {
+    $$ = nullptr;
+  }
+  else if ($1 == nullptr && $3 != nullptr) {
+    $$ = $3;
+  }
+  else if ($1 != nullptr && $3 == nullptr) {
+    $$ = $1;
+  }
+  else if ($1 != nullptr && $3 != nullptr) {
+    $$ = new Union();
+    ((Union*)$$)->addPattern($1);
+    ((Union*)$$)->addPattern($3);
+  }
  }
 | GroupGraphPattern {
   $$ = $1;

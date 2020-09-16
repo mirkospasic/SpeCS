@@ -6,6 +6,11 @@
 #include <cstring>
 #include "query.hpp"
 #include "parser.tab.hpp"
+#include <memory>
+#include <stdexcept>
+#include <array>
+
+extern int yydebug;
 
 using namespace std;
 
@@ -15,6 +20,20 @@ char *filename = (char *)"formula";
 void yyerror(string s) {
   cerr << s << " in " << filename << endl;
   exit(EXIT_FAILURE);
+}
+
+/* Function for executing cmd command */
+std::string exec(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
 }
 
 Query *subQuery = nullptr;
@@ -27,11 +46,12 @@ int main(int argc, char **argv) {
   //yydebug = 1;
 
   // For measuring times
-  auto start = chrono::high_resolution_clock::now();
+  auto start1 = chrono::high_resolution_clock::now();
 
   //Analysis of cmd arguments
   bool valid_arguments = false;
   bool rename = false;
+  bool qc_strict = false;
   extern FILE* yyin;
   if ((argc >= 3) && (string("-file") == argv[1])) {
     filename = argv[2];
@@ -40,6 +60,13 @@ int main(int argc, char **argv) {
     valid_arguments = true;
     if (argc > 3 && (string("-rename") == argv[3]))
       rename = true;
+    else if (argc > 4 && (string("-rename") == argv[4]))
+      rename = true;
+    if (argc > 3 && (string("-qc") == argv[3]))
+      qc_strict = true;
+    else if (argc > 4 && (string("-qc") == argv[4]))
+      qc_strict = true;
+    
   }
   else {
     int arg_no = 1;
@@ -72,6 +99,10 @@ int main(int argc, char **argv) {
 	arg_no++;
 	rename = true;
       }
+      else if (argv[arg_no] == string("-qc")) {
+	arg_no++;
+	qc_strict = true;
+      }
       else {
 	cerr << "Unknown argument" << argv[arg_no] << endl;
 	break;
@@ -103,13 +134,11 @@ int main(int argc, char **argv) {
     }
   }
   
-  if (valid_arguments == false) {
-    cout <<"usage: " << endl;
-    cout << "\t" << argv[0] << " -file file_with_2_sparql_queries [-rename]" << endl;
-    cout << "\t" << argv[0] << " -superquery q1 -subquery q2 [-schema sc] [-rename]" << endl;
-    return 0;
-  }
-  
+  if (valid_arguments == false)
+    yyerror(string("usage: \n") +
+	    "\t" + argv[0] + " -file file_with_2_sparql_queries [-qc] [-rename]\n" +
+	    "\t" + argv[0] + " -superquery q1 -subquery q2 [-schema sc] [-qc] [-rename]\n"
+	    );
 
   // Parsing
   try {
@@ -122,46 +151,31 @@ int main(int argc, char **argv) {
 
   // Measuring parsing times
   auto end1 = chrono::high_resolution_clock::now();
-  auto dur1 = end1 - start;
+  auto dur1 = end1 - start1;
+  long long dur2 = 0;
 
-
-  // Formula generation 
   if (superQuery->getLimit() >= 0 && ((subQuery->getLimit() >= 0 && superQuery->getLimit() < subQuery->getLimit()) || subQuery->getLimit() < 0)) {
     //cout << "sat - Super query cannot have limit less than subquery" << endl;
     //return 0;
   }
 
+  
   subQuery->addCommonPrefixes();
   superQuery->addCommonPrefixes();
+
+  superQuery->allIRIs();
+  superQuery->allLiterals();
+  superQuery->allVariables();
   
-  set<string> subQueryProjVars = subQuery->projVars();
-  set<string> superQueryProjVars = superQuery->projVars();
-
-  if (subQueryProjVars.size() > superQueryProjVars.size()) {
-    cout << "sat - Number of projections (or variables) in subquery cannot be greater than the number in superquery" << endl;
-    return 0;
-  }
-
-  // Is it allowed to use differently named projection variables
-  if (rename == false) {
-    for (auto p : subQueryProjVars) {
-      bool found = false;
-      string pp = p.substr(4, p.size()-5);
-      for (auto q : superQueryProjVars) {
-	string qq = q.substr(4, q.size()-5);
-	if (pp == qq) {
-	  found = true;
-	  break;
-	}
-      }
-      if (!found) {
-	cout << "sat - Projection " << pp << " from subquery is not present in superquery" << endl;
-	return 0;
-      }
-    }
-  }
-
   
+  // Formula generation starts
+
+  // Normalizing queries
+  subQuery->normalize();
+  superQuery->normalize();
+  if (schema != nullptr)
+    schema->normalize();
+    
   set<string> superQueryFroms = superQuery->getFrom();
   set<string> subQueryFroms = subQuery->getFrom();
   superQueryFroms.erase("<default_graph>");
@@ -174,119 +188,202 @@ int main(int argc, char **argv) {
       if (!superQueryFroms.count(a)) {
 	//cout << filename << endl;
 	cout << "sat - Froms in subquery is not subset of froms in superquery" << endl;
-	return 0;
+	goto end;
       }
     if (subQueryFroms.size() == 0) {
       //cout << filename << endl;
       cout << "sat - Froms in subquery is not subset of froms in superquery" << endl;
-      return 0;
+      goto end;
     }
   }
   //*/
+
+  //cout << superQuery->formula(1) << endl;
+  //return 0;
   
-  ofstream output;
-  string outputname = string(filename) + ".smt";
-  output.open(outputname);
+  for (unsigned union_i = 0; union_i < subQuery->numberOfConjuctive(); union_i++) {
+    bool ok = false;
+    for (unsigned union_j = 0; union_j < superQuery->numberOfConjuctive(); union_j++) {
+      //cout << union_i << " " << union_j << endl;
+      
+      Query* subQuery1 = subQuery->i_th_query(union_i);
+      Query* superQuery1 = superQuery->i_th_query(union_j);
+      
+      set<string> subQuery1Variables = subQuery1->allVariables();
+      set<string> superQuery1Variables = superQuery1->allVariables();
+      
+      set<string> subQuery1ProjVars = subQuery1->projVars();
+      set<string> superQuery1ProjVars = superQuery1->projVars();
+      
+      set<string> subQuery1ProjVarsIntersect, superQuery1ProjVarsIntersect;
+      for (auto a : subQuery1Variables)
+	if (subQuery1ProjVars.count(a))
+	  subQuery1ProjVarsIntersect.insert(a.replace(1, 3, ""));
+      for (auto a : superQuery1Variables)
+	if (superQuery1ProjVars.count(a))
+	  superQuery1ProjVarsIntersect.insert(a.replace(1, 3, ""));
 
-  output << "; ------------ Sort and Predicate -------------------" << endl;
-  output << common_formula() << endl;
+      if (qc_strict) {
+	if (rename) {
+	  if (subQuery1ProjVarsIntersect.size() != superQuery1ProjVarsIntersect.size()) {
+	    //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
+	    continue;
+	  }
+	}
+	else {
+	  if (subQuery1ProjVarsIntersect != superQuery1ProjVarsIntersect) {
+	    //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
+	    continue;
+	  }
+	}
+      }
+      else {
+	if (rename) {
+	  if (subQuery1ProjVarsIntersect.size() > superQuery1ProjVarsIntersect.size()) {
+	    //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
+	    continue;
+	  }
+	}
+	else {
+	  bool ret = false;
+	  for (auto a : subQuery1ProjVarsIntersect)
+	    if (superQuery1ProjVarsIntersect.count(a) == 0) {
+	      //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
+	      ret = true;
+	      break;
+	    }
+	  if (ret)
+	    continue;
+	}
+      }
+      
+      
+      ofstream output;
+      string outputname = string(filename) + ".smt";
+      output.open(outputname);
+      
+      output << "; ------------ Sort and Predicate -------------------" << endl;
+      output << common_formula() << endl;
+      
+      output << "; ------------ IRIs ---------------------------------" << endl;
+      set<string> subQuery1IRIs = subQuery1->allIRIs();
+      set<string> superQuery1IRIs = superQuery1->allIRIs();
+      set<string> schemaIRIs;
+      set<string> iris = subQuery1IRIs;
+      iris.insert(superQuery1IRIs.begin(), superQuery1IRIs.end());
+      if (schema != nullptr) {
+	schemaIRIs = schema->allIRIs();
+	schemaIRIs.insert("<a>");
+	iris.insert(schemaIRIs.begin(), schemaIRIs.end());
+      }
+      for (auto a : subQuery1->getFrom())
+	iris.insert(a);
+      for (auto a : subQuery1->getFromNamed())
+	iris.insert(a);
+      for (auto a : superQuery1->getFrom())
+	iris.insert(a);
+      for (auto a : superQuery1->getFromNamed())
+	iris.insert(a);
+      for (auto a : iris) {
+	if (a != "<default_graph>")
+	  output << "(declare-const\t" << a << "\tRDFValue)" << endl;
+      }
+      output << endl;
+      
+      
+      output << "; ------------ Literals -----------------------------" << endl;
+      set<string> subQuery1Literals = subQuery1->allLiterals();
+      set<string> superQuery1Literals = superQuery1->allLiterals();
+      for (auto a : subQuery1Literals)
+	output << "(declare-const\t" << a << "\tRDFValue)" << endl;
+      for (auto a : superQuery1Literals)
+	if (!subQuery1Literals.count(a))
+	  output << "(declare-const\t" << a << "\tRDFValue)" << endl;
+      output << endl;
+      
+      if (schema != nullptr) {
+	output << "; ------------ Schema -------------------------------" << endl;
+	output << "(assert " << endl;
+	output << schema->schemaFormula(1) << endl;
+	output << ")" << endl << endl;
+      }
+      
+      output << "; ------------ Variables ----------------------------" << endl;
+      for (auto a : subQuery1Variables)
+	output << "(declare-const\t" << a << "\tRDFValue)" << endl;
+      output << endl;
+      
+      output << "; ------------ Assumption ---------------------------" << endl;
+      output << "(assert " << endl;
+      output << subQuery1->formula(1) << endl;
+      output << ")" << endl << endl;
+      //cout << "---------------" << endl;
+      //cout << subQuery1->formula(1) << endl;
+      //cout << "---------------" << endl;
+      //cout << superQuery1->formula(1) << endl;
+      //cout << "---------------" << endl;
 
-  output << "; ------------ IRIs ---------------------------------" << endl;
-  set<string> subQueryIRIs = subQuery->allIRIs();
-  set<string> superQueryIRIs = superQuery->allIRIs();
-  set<string> schemaIRIs;
-  set<string> iris = subQueryIRIs;
-  iris.insert(superQueryIRIs.begin(), superQueryIRIs.end());
-  if (schema != nullptr) {
-    schemaIRIs = schema->allIRIs();
-    schemaIRIs.insert("<a>");
-    iris.insert(schemaIRIs.begin(), schemaIRIs.end());
+      
+      output << "; ------------ Conjecture ---------------------------" << endl;
+      output << "(assert (not (exists (";
+      for (auto a : superQuery1Variables)
+	output << "(" << a << " RDFValue)";
+      output << ") " << endl;
+      string conjecture = superQuery1->formula(1);
+      try {
+	conjecture = conjecture.substr(0, conjecture.size()-1) + "\t" + eqProj(superQuery1ProjVars, subQuery1ProjVars, rename) + "\n\t)";
+      }
+      catch (string s) {
+	//cout << "sat - " << s << endl;
+	continue;
+      }
+      output << conjecture << endl;
+      output << ")))" << endl << endl;
+      
+      output << "; ------------ Check-Sat ----------------------------" << endl;
+      output << "(check-sat)" << endl;
+      
+      output.close();
+      
+      //delete subQuery1;
+      //delete superQuery1;
+      
+      // Measuring times needed for z3
+      auto start2 = chrono::high_resolution_clock::now();
+      
+      // Execute z3 solver with 60s timeout 
+      string solve = "z3 -T:60 -smt2 " + outputname;
+      string result = exec(solve.c_str());
+      if (result.substr(0, 5) == "unsat")
+	ok = true;
+      
+      // Measuring times needed for z3
+      auto end2 = chrono::high_resolution_clock::now();
+      dur2 += chrono::duration_cast<std::chrono::nanoseconds>(end2 - start2).count();
+
+      if (ok) {
+	//cout << "ok" << union_i << " " << union_j << endl;
+	break;
+      }
+    }
+    if (!ok) {
+      cout << "sat - " << union_i << endl;
+      goto end;
+    }
   }
-  for (auto a : subQuery->getFrom())
-    iris.insert(a);
-  for (auto a : subQuery->getFromNamed())
-    iris.insert(a);
-  for (auto a : superQuery->getFrom())
-    iris.insert(a);
-  for (auto a : superQuery->getFromNamed())
-    iris.insert(a);
-  for (auto a : iris) {
-    if (a != "<default_graph>")
-      output << "(declare-const\t" << a << "\tRDFValue)" << endl;
-  }
-  output << endl;
 
-
-  output << "; ------------ Literals -----------------------------" << endl;
-  set<string> subQueryLiterals = subQuery->allLiterals();
-  set<string> superQueryLiterals = superQuery->allLiterals();
-  for (auto a : subQueryLiterals)
-    output << "(declare-const\t" << a << "\tRDFValue)" << endl;
-  for (auto a : superQueryLiterals)
-    if (!subQueryLiterals.count(a))
-      output << "(declare-const\t" << a << "\tRDFValue)" << endl;
-  output << endl;
-
-  if (schema != nullptr) {
-    output << "; ------------ Schema -------------------------------" << endl;
-    output << "(assert " << endl;
-    output << schema->schemaFormula(1) << endl;
-    output << ")" << endl << endl;
-  }
-  
-  set<string> subQueryVariables = subQuery->allVariables();
-  set<string> superQueryVariables = superQuery->allVariables();
-  output << "; ------------ Variables ----------------------------" << endl;
-  for (auto a : subQueryVariables)
-    output << "(declare-const\t" << a << "\tRDFValue)" << endl;
-  output << endl;
-  
-  output << "; ------------ Assumption ---------------------------" << endl;
-  output << "(assert " << endl;
-  output << subQuery->formula(1) << endl;
-  output << ")" << endl << endl;
-
-  output << "; ------------ Conjecture ---------------------------" << endl;
-  output << "(assert (not (exists (";
-  for (auto a : superQueryVariables)
-    output << "(" << a << " RDFValue)";
-  output << ") " << endl;
-  string conjecture = superQuery->formula(1);
-  try {
-    conjecture = conjecture.substr(0, conjecture.size()-1) + "\t" + eqProj(superQueryProjVars, subQueryProjVars, rename) + "\n\t)";
-  }
-  catch (string s) {
-    cout << "sat - " << s << endl;
-    return 0;
-  }
-  output << conjecture << endl;
-  output << ")))" << endl << endl;
-  
-  output << "; ------------ Check-Sat ----------------------------" << endl;
-  output << "(check-sat)" << endl;
-  
   fclose(yyin);
-  output.close();
+  cout << "unsat" << endl;
 
-  delete subQuery;
-  delete superQuery;
-
-  // Measuring times needed for formula generation
-  auto end2 = chrono::high_resolution_clock::now();
-  auto dur2 = end2 - end1;
-
-  // Execute z3 solver with 60s timeout 
-  string solve = "z3 -T:60 -smt2 " + outputname;
-  system(solve.c_str());
-
-  // Measuring times needed for z3
+ end:
+  // Measuring total time
   auto end3 = chrono::high_resolution_clock::now();
-  auto dur3 = end3 - end2;
-
+  auto dur3 = end3 - start1;
+  
   // Writing of execution times
   //cerr << chrono::duration_cast<std::chrono::nanoseconds>(dur1).count() << ";";
-  //cerr << chrono::duration_cast<std::chrono::nanoseconds>(dur2).count() << ";";
+  //cerr << dur2 << ";";
   //cerr << chrono::duration_cast<std::chrono::nanoseconds>(dur3).count() << endl;
-
+  
   return 0;
 }

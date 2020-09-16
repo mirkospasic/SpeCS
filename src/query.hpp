@@ -15,6 +15,7 @@ string prepareString(const string &t, const map<string, string> &prefixes);
 
 class Query;
 
+/* Basic class for all kind of graph patterns */
 class Pattern {
 public:
   virtual ~Pattern() {
@@ -28,6 +29,8 @@ public:
   virtual string schemaFormula(unsigned t) const = 0;
   virtual void setOptionalVariables(set<string> nonOptionalVariables, int i) = 0;
   virtual void setQuery(Query*) = 0;
+  virtual Pattern* normalize1() = 0;
+  virtual Pattern* normalize() = 0;
   Query* getQuery() const {
     return _qp;
   }
@@ -106,6 +109,8 @@ public:
   {}
   string formula(unsigned t, set<string> from, set<string> from_named) const;
   string schemaFormula(unsigned t) const;
+  Pattern* normalize1();
+  Pattern* normalize();
 };
 
 class Union : public MorePatterns {
@@ -115,6 +120,8 @@ public:
   {}
   string formula(unsigned t, set<string> from, set<string> from_named) const;
   string schemaFormula(unsigned t) const;
+  Pattern* normalize1();
+  Pattern* normalize();
 };
 
 class TriplePattern : public Pattern {
@@ -187,6 +194,8 @@ public:
   void setQuery(Query* q) {
     _qp = q;
   }
+  Pattern* normalize1() { return this;}
+  Pattern* normalize() { return this;}
 private:
   RDFValue* _subject;
   RDFValue* _predicate;
@@ -224,11 +233,15 @@ public:
     //Should not happen
     return "";
   }
-
+  void setOptionalVariables(set<string> optionalVariables) {
+    _optionalVariables = optionalVariables;
+  }
   void setQuery(Query* q) {
     _qp = q;
     _p->setQuery(q);
   }
+  Pattern* normalize1() { return this; }
+  Pattern* normalize();
 private:
   OptionalPattern(const OptionalPattern&);
   OptionalPattern& operator=(const OptionalPattern&);
@@ -265,6 +278,8 @@ public:
   void setQuery(Query* q) {
     _qp = q;
   }
+  Pattern* normalize1() { return this; }
+  Pattern* normalize() { return this; }
 };
 
 class PrimaryExpression : public Expression {
@@ -421,6 +436,8 @@ private:
   string _name;
 };
 
+
+/* Class representing a single SPARQL query  */
 class Query {
 public:
   Query(map<string, string> m, vector<Expression*> v, Pattern* p, pair<set<string>, set<string> > f = pair<set<string>, set<string> >(set<string>(), set<string>()), int l = -1, int o = -1, RDFValue* var = nullptr, vector<RDFValue*> values = vector<RDFValue*>())
@@ -518,6 +535,37 @@ public:
   void setQuery(Query* q) {
     _pattern->setQuery(q);
   }
+  void normalize() {
+    _pattern = _pattern->normalize1();
+    _pattern = _pattern->normalize();  
+    And* tmp = dynamic_cast<And*>(_pattern);
+    if (tmp == nullptr) {
+      And *a = new And();
+      a->addPattern(_pattern);
+      _pattern = a;
+    }
+  }
+  unsigned numberOfConjuctive() const {
+    Union* tmp = dynamic_cast<Union*>(((And*)(_pattern))->getPatterns()[0]);
+    if (tmp == nullptr)
+      return 1;
+    else
+      return tmp->getPatterns().size();
+  }
+  Query* i_th_query(unsigned i) const {
+    Query* q_i = new Query(*this);
+    if (numberOfConjuctive() == 1)
+      return q_i;
+    Union* tmp = dynamic_cast<Union*>(((And*)(_pattern))->getPatterns()[0]);
+    if (dynamic_cast<And*>(tmp->getPatterns()[i]) == nullptr) {
+      And *a = new And();
+      a->addPattern(tmp->getPatterns()[i]);
+      q_i->_pattern = a;
+    }
+    else
+      q_i->_pattern = tmp->getPatterns()[i];
+    return q_i;
+  }
 private:
   map<string, string> _prefixes;
   map<string, string> _prefixes_new;
@@ -571,6 +619,8 @@ public:
     _qp = q;
     _q->setQuery(q);
   }
+  Pattern* normalize1() { _q->normalize(); return this; }
+  Pattern* normalize() { _q->normalize(); return this; }
 private:
   SubqueryPattern(const SubqueryPattern&);
   SubqueryPattern& operator=(const SubqueryPattern&);
@@ -616,6 +666,8 @@ public:
   void setQuery(Query* q) {
     _p->setQuery(q);
   }
+  Pattern* normalize1() { _p = _p->normalize1(); return this; }
+  Pattern* normalize() { _p = _p->normalize(); return this; }
 private:
   GraphPattern(const GraphPattern&);
   GraphPattern& operator=(const GraphPattern&);

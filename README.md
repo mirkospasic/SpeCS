@@ -23,10 +23,12 @@ In order to execute SpeCS, Z3 solver has to be installed (https://github.com/Z3P
 
 # Execution
 
-> ./specs -file path_to_file_with_2_sparql_queries [-rename]
+> ./specs -file path_to_file_with_2_sparql_queries [-rename] [-qc]
 
-> ./specs -superquery q1 -subquery q2 [-schema sc] [-rename]
+> ./specs -superquery q1 -subquery q2 [-schema sc] [-rename] [-qc]
 
+The option -rename allows renaming of projection variables that is forbidden by default.
+The option -qc causes to chech the containment relation, instead of subsumption by default.
 The output 'unsat' means that query containment is present, while 'sat' means the oposite.
 
 # Test Examples
