@@ -203,6 +203,7 @@ int main(int argc, char **argv) {
   
   for (unsigned union_i = 0; union_i < subQuery->numberOfConjuctive(); union_i++) {
     bool ok = false;
+    bool check_unsatisfiability_of_q1 = false;
     for (unsigned union_j = 0; union_j < superQuery->numberOfConjuctive(); union_j++) {
       //cout << union_i << " " << union_j << endl;
       
@@ -227,13 +228,15 @@ int main(int argc, char **argv) {
 	if (rename) {
 	  if (subQuery1ProjVarsIntersect.size() != superQuery1ProjVarsIntersect.size()) {
 	    //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
-	    continue;
+	    //continue;
+	    check_unsatisfiability_of_q1 = true;
 	  }
 	}
 	else {
 	  if (subQuery1ProjVarsIntersect != superQuery1ProjVarsIntersect) {
 	    //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
-	    continue;
+	    //continue;
+	    check_unsatisfiability_of_q1 = true;
 	  }
 	}
       }
@@ -241,19 +244,22 @@ int main(int argc, char **argv) {
 	if (rename) {
 	  if (subQuery1ProjVarsIntersect.size() > superQuery1ProjVarsIntersect.size()) {
 	    //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
-	    continue;
+	    //continue;
+	    check_unsatisfiability_of_q1 = true;
 	  }
 	}
 	else {
 	  bool ret = false;
 	  for (auto a : subQuery1ProjVarsIntersect)
 	    if (superQuery1ProjVarsIntersect.count(a) == 0) {
-	      //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
 	      ret = true;
 	      break;
 	    }
-	  if (ret)
-	    continue;
+	  if (ret) {
+	    //cout << "sat - constraint over sets" << union_i << " " << union_j << endl;
+	    //continue;
+	    check_unsatisfiability_of_q1 = true;
+	  }
 	}
       }
       
@@ -323,22 +329,23 @@ int main(int argc, char **argv) {
       //cout << superQuery1->formula(1) << endl;
       //cout << "---------------" << endl;
 
-      
-      output << "; ------------ Conjecture ---------------------------" << endl;
-      output << "(assert (not (exists (";
-      for (auto a : superQuery1Variables)
-	output << "(" << a << " RDFValue)";
-      output << ") " << endl;
-      string conjecture = superQuery1->formula(1);
-      try {
-	conjecture = conjecture.substr(0, conjecture.size()-1) + "\t" + eqProj(superQuery1ProjVars, subQuery1ProjVars, rename) + "\n\t)";
+      if (check_unsatisfiability_of_q1 == false) {
+	output << "; ------------ Conjecture ---------------------------" << endl;
+	output << "(assert (not (exists (";
+	for (auto a : superQuery1Variables)
+	  output << "(" << a << " RDFValue)";
+	output << ") " << endl;
+	string conjecture = superQuery1->formula(1);
+	try {
+	  conjecture = conjecture.substr(0, conjecture.size()-1) + "\t" + eqProj(superQuery1ProjVars, subQuery1ProjVars, rename) + "\n\t)";
+	}
+	catch (string s) {
+	  //cout << "sat - " << s << endl;
+	  continue;
+	}
+	output << conjecture << endl;
+	output << ")))" << endl << endl;
       }
-      catch (string s) {
-	//cout << "sat - " << s << endl;
-	continue;
-      }
-      output << conjecture << endl;
-      output << ")))" << endl << endl;
       
       output << "; ------------ Check-Sat ----------------------------" << endl;
       output << "(check-sat)" << endl;
