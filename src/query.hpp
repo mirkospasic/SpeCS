@@ -492,8 +492,12 @@ public:
   set<string> allVariables() const {
     set<string> res = _pattern->allVariables(_id);
     for (auto a : _projections) {
-      set<string> tmp = a->allVariables(_id);
-      res.insert(tmp.begin(), tmp.end());
+      EqExpression* tmp = dynamic_cast<EqExpression*>(a);
+      if (tmp == nullptr)
+	continue;
+      res.insert(tmp->getStringLeft());
+      //set<string> tmp = a->allVariables(_id);
+      //res.insert(tmp.begin(), tmp.end());
     }
     return res;
   }
