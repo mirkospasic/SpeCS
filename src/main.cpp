@@ -224,6 +224,18 @@ int main(int argc, char **argv) {
 	if (superQuery1ProjVars.count(a))
 	  superQuery1ProjVarsIntersect.insert(a.replace(1, 3, ""));
 
+      /*
+      for (auto a : superQuery1Variables)
+	cout << a << endl;
+      cout << "---------------" << endl;
+      for (auto a : superQuery1ProjVars)
+	cout << a << endl;
+      cout << "---------------" << endl;
+      for (auto a : superQuery1ProjVarsIntersect)
+	cout << a << endl;
+      cout << "---------------" << endl;
+      */
+
       if (qc_strict) {
 	if (rename) {
 	  if (subQuery1ProjVarsIntersect.size() != superQuery1ProjVarsIntersect.size()) {
@@ -332,8 +344,11 @@ int main(int argc, char **argv) {
       if (check_unsatisfiability_of_q1 == false) {
 	output << "; ------------ Conjecture ---------------------------" << endl;
 	output << "(assert (not (exists (";
-	for (auto a : superQuery1Variables)
+	for (auto a : superQuery1ProjVars)
 	  output << "(" << a << " RDFValue)";
+	for (auto a : superQuery1Variables)
+	  if (superQuery1ProjVars.count(a) == 0)
+	    output << "(" << a << " RDFValue)";
 	output << ") " << endl;
 	string conjecture = superQuery1->formula(1);
 	try {
