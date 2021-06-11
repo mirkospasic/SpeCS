@@ -440,8 +440,8 @@ private:
 /* Class representing a single SPARQL query  */
 class Query {
 public:
-  Query(map<string, string> m, vector<Expression*> v, Pattern* p, pair<set<string>, set<string> > f = pair<set<string>, set<string> >(set<string>(), set<string>()), int l = -1, int o = -1, RDFValue* var = nullptr, vector<RDFValue*> values = vector<RDFValue*>())
-    :_prefixes(m), _projections(v), _pattern(p), _from(f.first), _from_named(f.second), _limit(l), _offset(o), _var(var), _values(values)
+  Query(map<string, string> m, vector<Expression*> v, Pattern* p, bool d = false, vector<pair<RDFValue *, bool>> vpvb = vector<pair<RDFValue *, bool>>(), pair<set<string>, set<string> > f = pair<set<string>, set<string> >(set<string>(), set<string>()), int l = -1, int o = -1, RDFValue* var = nullptr, vector<RDFValue*> values = vector<RDFValue*>())
+    :_prefixes(m), _projections(v), _pattern(p), _distinct(d), _order_by(vpvb), _from(f.first), _from_named(f.second), _limit(l), _offset(o), _var(var), _values(values)
   {
     for (auto a : _prefixes) {
       if (_prefixes_abrv[a.second] == "")
@@ -570,12 +570,20 @@ public:
       q_i->_pattern = tmp->getPatterns()[i];
     return q_i;
   }
+  vector<pair<RDFValue *, bool>> getOrderBy() const {
+    return _order_by;
+  }
+  bool getDistinct() const {
+    return _distinct;
+  }
 private:
   map<string, string> _prefixes;
   map<string, string> _prefixes_new;
   static map<string, string> _prefixes_abrv;
   vector<Expression*> _projections;
   Pattern* _pattern;
+  bool _distinct;
+  vector<pair<RDFValue *, bool>> _order_by;
   set<string> _from;
   set<string> _from_named;
   int _limit;

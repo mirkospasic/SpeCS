@@ -52,6 +52,8 @@ int main(int argc, char **argv) {
   bool valid_arguments = false;
   bool rename = false;
   bool qc_strict = false;
+  bool eq_check = false;
+  
   extern FILE* yyin;
   if ((argc >= 3) && (string("-file") == argv[1])) {
     filename = argv[2];
@@ -62,11 +64,20 @@ int main(int argc, char **argv) {
       rename = true;
     else if (argc > 4 && (string("-rename") == argv[4]))
       rename = true;
+    else if (argc > 5 && (string("-rename") == argv[5]))
+      rename = true;
     if (argc > 3 && (string("-qc") == argv[3]))
       qc_strict = true;
     else if (argc > 4 && (string("-qc") == argv[4]))
       qc_strict = true;
-    
+    else if (argc > 5 && (string("-qc") == argv[5]))
+      qc_strict = true;
+    if (argc > 3 && (string("-eq") == argv[3]))
+      eq_check = true;
+    else if (argc > 4 && (string("-eq") == argv[4]))
+      eq_check = true;
+    else if (argc > 5 && (string("-eq") == argv[5]))
+      eq_check = true;
   }
   else {
     int arg_no = 1;
@@ -103,6 +114,10 @@ int main(int argc, char **argv) {
 	arg_no++;
 	qc_strict = true;
       }
+      else if (argv[arg_no] == string("-eq")) {
+	arg_no++;
+	eq_check = true;
+      }
       else {
 	cerr << "Unknown argument" << argv[arg_no] << endl;
 	break;
@@ -136,8 +151,8 @@ int main(int argc, char **argv) {
   
   if (valid_arguments == false)
     yyerror(string("usage: \n") +
-	    "\t" + argv[0] + " -file file_with_2_sparql_queries [-qc] [-rename]\n" +
-	    "\t" + argv[0] + " -superquery q1 -subquery q2 [-schema sc] [-qc] [-rename]\n"
+	    "\t" + argv[0] + " -file file_with_2_sparql_queries [-qc] [-rename] [-eq]\n" +
+	    "\t" + argv[0] + " -superquery q1 -subquery q2 [-schema sc] [-qc] [-rename] [-eq]\n"
 	    );
 
   // Parsing
@@ -153,12 +168,6 @@ int main(int argc, char **argv) {
   auto end1 = chrono::high_resolution_clock::now();
   auto dur1 = end1 - start1;
   long long dur2 = 0;
-
-  if (superQuery->getLimit() >= 0 && ((subQuery->getLimit() >= 0 && superQuery->getLimit() < subQuery->getLimit()) || subQuery->getLimit() < 0)) {
-    //cout << "sat - Super query cannot have limit less than subquery" << endl;
-    //return 0;
-  }
-
   
   subQuery->addCommonPrefixes();
   superQuery->addCommonPrefixes();
@@ -182,6 +191,37 @@ int main(int argc, char **argv) {
   subQueryFroms.erase("<default_graph>");
   set<string> superQueryFromNamed = superQuery->getFromNamed();
   set<string> subQueryFromNamed = subQuery->getFromNamed();
+
+  if (eq_check) {
+    //if (superQuery->getLimit() >= 0 && ((subQuery->getLimit() >= 0 && superQuery->getLimit() < subQuery->getLimit()) || subQuery->getLimit() < 0)) {
+    if (subQuery->getLimit() != superQuery->getLimit()) {
+      cout << "sat - limit" << endl;
+      goto end;
+    }
+
+    if (subQuery->getOffset() != superQuery->getOffset()) {
+      cout << "sat - offset" << endl;
+      goto end;
+    }
+
+    vector<pair<RDFValue *, bool>> v1, v2;
+    v1 = superQuery->getOrderBy();
+    v2 = subQuery->getOrderBy();
+    bool order_tmp = true;
+    if (v1.size() != v2.size())
+      order_tmp = false;
+    for (unsigned i = 0; i < v1.size(); i++) {
+      if (v1[i].second != v2[i].second)
+	order_tmp = false;
+      //TODO: Check variables as well
+    }
+    if (order_tmp == false) {
+      cout << "sat - order" << endl;
+      goto end;
+    }    
+  }
+
+
   ///*
   if (superQueryFroms.size() != 0) {
     for (auto a : subQueryFroms)

@@ -26,12 +26,16 @@ extern Query *schema;
   vector <RDFValue* > *v1;
   vector <pair<RDFValue*, vector<RDFValue*> > > *v2;
   vector <Expression*> *v3;
+  pair<vector <Expression*>, bool> *vb3;
   map<string, string> *m;
   Query *q;
   Expression *e;
   int i;
   pair<set<string>, set<string> > *ss;
   pair<int, int> *pii;
+  pair<RDFValue *, bool> *pvb;
+  vector<pair<RDFValue *, bool>> *vpvb;
+  bool b;
 }
 
 %token select_token distinct_token where_token as_token union_token optional_token minus_token prefix_token schema_token superquery_token subquery_token limit_token from_token named_token order_by_token asc_token desc_token filter_token regex_token group_by_token and_token or_token graph_token builtin_str_token noteq_token bind_token round_token offset_token abs_token datatype_token values_token contains_token lcase_token is_literal_token is_uri_token bound_token
@@ -44,11 +48,15 @@ extern Query *schema;
 %type <v> VarOrIri Verb VarOrTerm Object RDFLiteral Var IRIRef
 %type <v1> ObjectList ValuesClause DataBlockValue
 %type <v2> PropertyListPathNotEmpty
-%type <v3> Projections Selects SelectClause
+%type <v3> Projections Selects
+%type <vb3> SelectClause
 %type <m> PrefixDecl Decl
 %type <q> Query SuperQuery SubQuery
 %type <e> Projection Expression BuiltInCall
 %type <pii> LimitOffset
+%type <pvb> OrderElem
+%type <vpvb> OrderList SolutionModifier
+%type <b> DistinctClause
 
 %nonassoc '!'
 %left or_token
@@ -95,17 +103,19 @@ Query: Decl SelectClause DatasetClause WhereClause SolutionModifier LimitOffset 
     values = vector<RDFValue*>($7->begin() + 1, $7->end());
   }
   delete $7;
-  $$ = new Query(*$1, *$2, $4, *$3, $6->first, $6->second, v, values);
+  $$ = new Query(*$1, $2->first, $4, $2->second, *$5, *$3, $6->first, $6->second, v, values);
   delete $1;
   delete $2;
   delete $3;
+  delete $5;
   delete $6;
  }
 ;
 
 SubSelect: SelectClause WhereClause SolutionModifier {
-  Query *q = new Query(map<string, string>(), *$1, $2);
+  Query *q = new Query(map<string, string>(), $1->first, $2, $1->second, *$3);
   $$ = new SubqueryPattern(q);
+  delete $3;
  }
 ;
 
@@ -134,15 +144,16 @@ Prefix: str_token {
 ;
 
 SelectClause: select_token DistinctClause Selects {
-  $$ = $3;
+  $$ = new pair<vector<Expression*>, bool>(*$3, $2);
+  delete $3;
 }
 ;
 
 DistinctClause: distinct_token {
-  // Ovo nista ne znaci kod set-semantike
+  $$ = true;
  }
 | {
-  // Ovo nista ne znaci kod set-semantike
+  $$ = false;
  }
 ;
 
@@ -525,13 +536,14 @@ MinusGraphPattern: minus_token GroupGraphPattern {
 
 
 SolutionModifier:  order_by_token OrderList {
-  // Ovo nista ne znaci kod set-semantike
+  $$ = $2;
 }
 | group_by_token GroupConditions {
   // ovo nista ne znaci bez agregatnih fja
+  $$ = new vector<pair <RDFValue*, bool> >();
  }
 | {
-  //Nothing here
+  $$ = new vector<pair <RDFValue*, bool> >();
   }
 ;
 
@@ -553,21 +565,28 @@ LimitOffset: limit_token int_token offset_token int_token {
 ;
 
 OrderList: OrderList OrderElem {
-  //Nothing here
+  $$ = $1;
+  $$->push_back(*$2);
+  delete $2;
  }
 | OrderElem {
-  //Nothing here
+  $$ = new vector< pair<RDFValue*, bool> >();
+  $$->push_back(*$1);
+  delete $1;
  }
 ;
 
 OrderElem: desc_token '(' var_token ')' {
-  // Ovo nista ne znaci kod set-semantike
+  $$ = new pair<RDFValue*, bool>(new Variable(*$3), false);
+  delete $3;
  }
 | asc_token '(' var_token ')' {
-  // Ovo nista ne znaci kod set-semantike
+  $$ = new pair<RDFValue*, bool>(new Variable(*$3), true);
+  delete $3;
  }
 | var_token {
-  // Ovo nista ne znaci kod set-semantike
+  $$ = new pair<RDFValue*, bool>(new Variable(*$1), true);
+  delete $1;
  }
 
 ;
