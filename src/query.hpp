@@ -250,14 +250,23 @@ protected:
   set<string> _optionalVariables;
 };
 
+class DiffPattern : public OptionalPattern {
+public:
+  DiffPattern(Pattern *p)
+    :OptionalPattern(p)
+  {  }
+  Pattern* normalize() { return this; }
+  string formula(unsigned t, set<string> from, set<string> from_named) const;
+};
+
 class MinusPattern : public OptionalPattern {
 public:
   MinusPattern(Pattern *p)
     :OptionalPattern(p)
   {  }
+  Pattern* normalize() { return this; }
   string formula(unsigned t, set<string> from, set<string> from_named) const;
 };
-
 
 class Expression : public Pattern {
 public:
@@ -541,7 +550,8 @@ public:
   }
   void normalize() {
     _pattern = _pattern->normalize1();
-    _pattern = _pattern->normalize();  
+    _pattern = _pattern->normalize();
+
     And* tmp = dynamic_cast<And*>(_pattern);
     if (tmp == nullptr) {
       And *a = new And();

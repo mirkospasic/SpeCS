@@ -77,21 +77,7 @@ string OptionalPattern::formula(unsigned t, set<string> from, set<string> from_n
   return res;
 }
 
-string MinusPattern::formula(unsigned t, set<string> from, set<string> from_named) const {
-  /*
-  string res = tabs(t);
-  res += "(and \n";
-  res += tabs(t+1) + "(not \n";
-  res += _p->formula(t+2, from, from_named);
-  res += "\n";
-  res += tabs(t+1) + ")\n";
-  res += tabs(t+1);
-  for (auto a : _optionalVariables)
-    res += "(not (f_bound " + a + "))";
-  res += "\n";
-  res += tabs(t) + ")";
-  */
-  
+string DiffPattern::formula(unsigned t, set<string> from, set<string> from_named) const {
   string res = tabs(t);
   res += "(forall (";
   for (auto a : _optionalVariables)
@@ -106,6 +92,34 @@ string MinusPattern::formula(unsigned t, set<string> from, set<string> from_name
   res += tabs(t) + ")";
   
   return res;
+}
+
+string MinusPattern::formula(unsigned t, set<string> from, set<string> from_named) const {
+
+  set<string> all = allVariables(getQuery()->getId());
+  bool disjunct = true;
+  for (auto a : all)
+    if (!_optionalVariables.count(a))
+      disjunct = false;
+  if (disjunct == false)  {
+    string res = tabs(t);
+    res += "(forall (";
+    for (auto a : _optionalVariables)
+      res += "(" + a + " RDFValue)";
+    if (_optionalVariables.size() == 0)
+      res += "(foo_foo_foo RDFValue)";
+    res += ")\n";
+    
+    res += tabs(t+1) + "(not \n";
+    res += _p->formula(t+2, from, from_named) + "\n";
+    res += tabs(t+1) + ")\n";
+    res += tabs(t) + ")";
+    
+    return res;
+  }
+  else {
+    return "";
+  }
 }
 
 string PrimaryExpression::getString() const {
@@ -568,9 +582,9 @@ Pattern* And::normalize1() {
 Pattern* OptionalPattern::normalize() {
   Union* tmp = new Union();
   tmp->addPattern(_p);
-  MinusPattern* minus = new MinusPattern(_p);
-  minus->setOptionalVariables(_optionalVariables);
-  tmp->addPattern(minus);
+  DiffPattern* diff = new DiffPattern(_p);
+  diff->setOptionalVariables(_optionalVariables);
+  tmp->addPattern(diff);
   return tmp;
 }
 
@@ -609,7 +623,7 @@ Pattern* And::normalize() {
       tmp = tmp2;
     }
     else if (u0 != nullptr && u1 == nullptr) {
-      tmp = new Union();
+      //tmp = new Union();
       for (unsigned ii = 0; ii < u0->getPatterns().size(); ii++) {
 	And *tmp1 = new And();
 	tmp1->addPattern(u0->getPatterns()[ii]);
@@ -624,5 +638,6 @@ Pattern* And::normalize() {
       tmp = tmp1;
     }
   }
+  
   return tmp->normalize1();
 }

@@ -238,6 +238,7 @@ int main(int argc, char **argv) {
   }
   //*/
 
+  //cout << subQuery->formula(1) << endl;
   //cout << superQuery->formula(1) << endl;
   //return 0;
   
