@@ -96,8 +96,15 @@ string DiffPattern::formula(unsigned t, set<string> from, set<string> from_named
 
 string MinusPattern::formula(unsigned t, set<string> from, set<string> from_named) const {
 
-  set<string> all = allVariables(getQuery()->getId());
+  set<string> all = _p->allVariables(getQuery()->getId());
   bool disjunct = true;
+
+  //for (auto a : all)
+  //  cout << "all: " << a << endl;
+
+  //for (auto a : _optionalVariables)
+  //  cout << "opt: " << a << endl;
+  
   for (auto a : all)
     if (!_optionalVariables.count(a))
       disjunct = false;

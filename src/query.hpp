@@ -266,6 +266,15 @@ public:
   {  }
   Pattern* normalize() { return this; }
   string formula(unsigned t, set<string> from, set<string> from_named) const;
+  set<string> allVariables(int i) const {
+    return set<string>();
+  }
+  void setOptionalVariables(set<string> nonOptionalVariables, int i) {
+    for (auto v : _p->allVariables(i)) {
+      if (nonOptionalVariables.count(v) == 0)
+	_optionalVariables.insert(v);
+    }
+  }
 };
 
 class Expression : public Pattern {
