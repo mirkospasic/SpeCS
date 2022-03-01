@@ -346,6 +346,25 @@ int main(int argc, char **argv) {
       for (auto a : iris) {
 	if (a != "<default_graph>")
 	  output << "(declare-const\t" << a << "\tRDFValue)" << endl;
+	size_t index = a.find("_Class");
+	if (index != string::npos) {
+	  iris.insert("<p0_subClassOf>");
+	}
+	index = a.find("_Property");
+	if (index != string::npos) {
+	  iris.insert("<p0_subPropertyOf>");
+	}
+	index = a.find("_ContainerMembershipProperty");
+	if (index != string::npos) {
+	  iris.insert("<p0_subPropertyOf>");
+	  iris.insert("<p0_member>");
+	}
+	index = a.find("_Datatype");
+	if (index != string::npos) {
+	  iris.insert("<p0_subClassOf>");
+	}
+	iris.insert("<p_Property>");
+	iris.insert("<p0_Resourse>");
       }
       output << endl;
       
@@ -363,7 +382,17 @@ int main(int argc, char **argv) {
       if (schema != nullptr) {
 	output << "; ------------ Schema -------------------------------" << endl;
 	output << "(assert " << endl;
+	output << schema->schemaFormula(1, false) << endl;
+	output << ")" << endl << endl;
+	output << "(assert " << endl;
 	output << schema->schemaFormula(1) << endl;
+	output << ")" << endl << endl;
+	output << "(assert " << endl;
+	output << "\t(and " << endl;
+	output << tabs(2) + "(forall ((s RDFValue)(p RDFValue)(o RDFValue)(g RDFValue)) (=> (P s p o g) (P p <a> <p_Property> g)))" << endl;
+	output << tabs(2) + "(forall ((s RDFValue)(p RDFValue)(o RDFValue)(g RDFValue)) (=> (P s p o g) (P s <a> <p0_Resourse> g)))" << endl;
+	output << tabs(2) + "(forall ((s RDFValue)(p RDFValue)(o RDFValue)(g RDFValue)) (=> (P s p o g) (P o <a> <p0_Resourse> g)))" << endl;
+	output << "\t)" << endl;
 	output << ")" << endl << endl;
       }
       

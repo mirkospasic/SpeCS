@@ -38,7 +38,13 @@ using namespace std;
 "bind"          return bind_token;
 "round"         return round_token;
 "abs"           return abs_token;
-"datatype"      return datatype_token;
+"datatype"      {
+  if (string(yytext) == "Datatype") {
+    yylval.s = new string(yytext);
+    return str_token;
+  } 
+  return datatype_token;
+}
 "values"        return values_token;
 "contains"      return contains_token;
 "lcase"         return lcase_token;

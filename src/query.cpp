@@ -178,12 +178,12 @@ string And::formula(unsigned t, set<string> from, set<string> from_named) const 
   return res;
 }
 
-string And::schemaFormula(unsigned t) const {
+string And::schemaFormula(unsigned t, bool axioms = true) const {
   string tt = tabs(t);
   string res = tt;
   res += "(and \n";
   for (auto a : _patterns)
-    res += a->schemaFormula(t + 1) + "\n";
+    res += a->schemaFormula(t + 1, axioms) + "\n";
   res += tt + ")";
   return res;
 }
@@ -198,7 +198,7 @@ string Union::formula(unsigned t, set<string> from, set<string> from_named) cons
   return res;
 }
 
-string Union::schemaFormula(unsigned t) const {
+string Union::schemaFormula(unsigned t, bool axioms = true) const {
   string tt = tabs(t);
   string res = tt;
   return res;
@@ -226,24 +226,85 @@ string TriplePattern::formula(unsigned t, set<string> from, set<string> from_nam
   return res;
 }
 
-string TriplePattern::schemaFormula(unsigned t) const {
+string TriplePattern::schemaFormula(unsigned t, bool axioms = true) const {
   string pred =  _predicate->getString();
-  if (pred.find("subClassOf") != string::npos)
-    return tabs(t) + "(forall ((x RDFValue)(g RDFValue)) " +
-                             "(=> (P x <a> " + _subject->getString() + " g) " +
-                               + "(P x <a> " + _object->getString() + " g)))";
-  if (pred.find("domain") != string::npos)
-        return tabs(t) + "(forall ((x RDFValue)(y RDFValue)(g RDFValue)) " +
-	                     "(=> (P x " + _subject->getString() + " y g) " +
-                               + "(P x <a> " + _object->getString() + " g)))";
-  if (pred.find("range") != string::npos)
-        return tabs(t) + "(forall ((x RDFValue)(y RDFValue)(g RDFValue)) " +
-	                     "(=> (P x " + _subject->getString() + " y g) " +
-                               + "(P y <a> " + _object->getString() + " g)))";
-  if (pred.find("subPropertyOf") != string::npos)
-        return tabs(t) + "(forall ((x RDFValue)(y RDFValue)(g RDFValue)) " +
-                             "(=> (P x " + _subject->getString() + " y g) " +
-                               + "(P x " + _object->getString() + " y g)))";
+  if (axioms) {
+    if (pred.find("subClassOf") != string::npos)
+      return tabs(t) + "(forall ((x RDFValue)(g RDFValue)) " +
+	"(=> (and (P x <a> " + _subject->getString() + " g) " + "(P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g))"
+	+ "(P x <a> " + _object->getString() + " g)))\n" +
+	tabs(t) + "(forall ((a RDFValue)(b RDFValue)(c RDFValue)(g RDFValue)) " +
+	"(=> (and (P a "  + _predicate->getString() + " b g) (P b "  + _predicate->getString() + " c g)) " +
+	+ "(P a " + _predicate->getString() + " c g)))";
+    if (pred.find("domain") != string::npos)
+      return tabs(t) + "(forall ((x RDFValue)(y RDFValue)(g RDFValue)) " +
+	"(=> (and (P x " + _subject->getString() + " y g) " + "(P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g)) " +
+	+ "(P x <a> " + _object->getString() + " g)))";
+    if (pred.find("range") != string::npos)
+      return tabs(t) + "(forall ((x RDFValue)(y RDFValue)(g RDFValue)) " +
+	"(=> (and (P x " + _subject->getString() + " y g) " + "(P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g)) " +
+	+ "(P y <a> " + _object->getString() + " g)))";
+    if (pred.find("subPropertyOf") != string::npos)
+      return tabs(t) + "(forall ((x RDFValue)(y RDFValue)(g RDFValue)) " +
+	"(=> (and (P x " + _subject->getString() + " y g) " + "(P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g)) " +
+	+ "(P x " + _object->getString() + " y g)))\n" +
+	tabs(t) + "(forall ((a RDFValue)(b RDFValue)(c RDFValue)(g RDFValue)) " +
+	"(=> (and (P a "  + _predicate->getString() + " b g) (P b "  + _predicate->getString() + " c g)) " +
+	+ "(P a " + _predicate->getString() + " c g)))";
+    if (pred == "<a>") {
+      if (_object->getString().find("_Class") != string::npos) {
+	string tmp = "<p0_Resource>";
+	string sc = "<p0_subClassOf>";
+	return tabs(t) + "(forall ((g RDFValue)) " +
+	"(=> (P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g) " +
+	  "(and (P " + _subject->getString() + " " + sc + " " + tmp + " g)" +
+	  "(P " + _subject->getString() + " " + sc + " " + _subject->getString() + " g))))\n" +
+	  tabs(t) + "(forall ((x RDFValue)(g RDFValue)) " +
+	"(=> (and (P x <a> " + _subject->getString() + " g) " + "(P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g))"
+	+ "(P x <a> " + tmp + " g)))\n" +
+	tabs(t) + "(forall ((a RDFValue)(b RDFValue)(c RDFValue)(g RDFValue)) " +
+	"(=> (and (P a "  + _predicate->getString() + " b g) (P b "  + _predicate->getString() + " c g)) " +
+	+ "(P a " + _predicate->getString() + " c g)))";
+      }
+      if (_object->getString().find("_Property") != string::npos) {
+	string tmp = "<p0_subPropertyOf>";
+	return tabs(t) + "(forall ((g RDFValue)) " +
+	"(=> (P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g) " +
+	  "(P " + _subject->getString() + " " + tmp + " " + _subject->getString() + " g)))";
+      }
+      if (_object->getString().find("_ContainerMembershipProperty") != string::npos) {
+	string tmp = "<p0_subPropertyOf>";
+	return tabs(t) + "(forall ((g RDFValue)) " +
+	"(=> (P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g) " +
+	  "(P " + _subject->getString() + " " + tmp + " " + "<p0_member>" + " g)))\n" +
+	  tabs(t) + "(forall ((x RDFValue)(y RDFValue)(g RDFValue)) " +
+	"(=> (and (P x " + _subject->getString() + " y g) " + "(P " + _subject->getString() + " " + "<p0_subPropertyOf>" + " " + "<p0_member>" + " g)) " +
+	+ "(P x " + "<p0_member>" + " y g)))\n" +
+	tabs(t) + "(forall ((a RDFValue)(b RDFValue)(c RDFValue)(g RDFValue)) " +
+	"(=> (and (P a "  + "<p0_subPropertyOf>" + " b g) (P b "  + "<p0_subPropertyOf>" + " c g)) " +
+	+ "(P a " + "<p0_subPropertyOf>" + " c g)))";
+      }
+      if (_object->getString().find("_Datatype") != string::npos) {
+	string tmp = "<p0_Literal>";
+	string sc = "<p0_subClassOf>";
+	return tabs(t) + "(forall ((g RDFValue)) " +
+	"(=> (P " + _subject->getString() + " " + _predicate->getString() + " " + _object->getString() + " g) " +
+	  "(P " + _subject->getString() + " " + sc + " " + tmp + " g)))\n" +
+	  tabs(t) + "(forall ((x RDFValue)(g RDFValue)) " +
+	"(=> (and (P x <a> " + _subject->getString() + " g) " + "(P " + _subject->getString() + " " + sc + " " + tmp + " g))"
+	+ "(P x <a> " + tmp + " g)))\n" +
+	tabs(t) + "(forall ((a RDFValue)(b RDFValue)(c RDFValue)(g RDFValue)) " +
+	"(=> (and (P a "  + _predicate->getString() + " b g) (P b "  + _predicate->getString() + " c g)) " +
+	+ "(P a " + _predicate->getString() + " c g)))";
+      }
+    }
+  }
+  else {
+    set<string> from;
+    from.insert("<default_graph>");
+    set<string> from_named;
+    return formula(t, from, from_named);
+  }
   return "(true)";
 }
 
@@ -294,8 +355,8 @@ string Query::formula(unsigned t) const {
   return tmp;
 }
 
-string Query::schemaFormula(unsigned t) const {
-  return  _pattern->schemaFormula(t);
+string Query::schemaFormula(unsigned t, bool axioms) const {
+  return  _pattern->schemaFormula(t, axioms);
 }
 
 set<string> Query::projVars() const {
@@ -610,6 +671,7 @@ Pattern* And::normalize() {
     Union* u0 = dynamic_cast<Union*>(tmp);
     Union* u1 = dynamic_cast<Union*>(_patterns[i]);
     if (u0 != nullptr && u1 != nullptr) {
+      //cout << "Case 1" << endl;
       tmp = new Union();
       for (unsigned ii = 0; ii < u0->getPatterns().size(); ii++)
 	for (unsigned jj = 0; jj < u1->getPatterns().size(); jj++) {
@@ -620,6 +682,7 @@ Pattern* And::normalize() {
 	}
     }
     else if (u0 == nullptr && u1 != nullptr) {
+      //cout << "Case 2" << endl;
       Union* tmp2 = new Union();
       for (unsigned jj = 0; jj < u1->getPatterns().size(); jj++) {
 	And *tmp1 = new And();
@@ -630,7 +693,8 @@ Pattern* And::normalize() {
       tmp = tmp2;
     }
     else if (u0 != nullptr && u1 == nullptr) {
-      //tmp = new Union();
+      //cout << "Case 3" << endl;
+      tmp = new Union();
       for (unsigned ii = 0; ii < u0->getPatterns().size(); ii++) {
 	And *tmp1 = new And();
 	tmp1->addPattern(u0->getPatterns()[ii]);
@@ -639,12 +703,12 @@ Pattern* And::normalize() {
       }      
     }
     else if (u0 == nullptr && u1 == nullptr) {
+      //cout << "Case 4" << endl;
       And *tmp1 = new And();
       tmp1->addPattern(tmp);
       tmp1->addPattern(_patterns[i]);
       tmp = tmp1;
     }
   }
-  
   return tmp->normalize1();
 }

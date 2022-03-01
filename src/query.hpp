@@ -26,7 +26,7 @@ public:
   virtual set<string> allVariables(int i) const = 0;
   virtual set<string> allBoundVariables(int i) const = 0;
   virtual string formula(unsigned t, set<string> from, set<string> from_named) const = 0;
-  virtual string schemaFormula(unsigned t) const = 0;
+  virtual string schemaFormula(unsigned t, bool axioms = true) const = 0;
   virtual void setOptionalVariables(set<string> nonOptionalVariables, int i) = 0;
   virtual void setQuery(Query*) = 0;
   virtual Pattern* normalize1() = 0;
@@ -108,7 +108,7 @@ public:
     :MorePatterns()
   {}
   string formula(unsigned t, set<string> from, set<string> from_named) const;
-  string schemaFormula(unsigned t) const;
+  string schemaFormula(unsigned t, bool axioms) const;
   Pattern* normalize1();
   Pattern* normalize();
 };
@@ -119,7 +119,7 @@ public:
     :MorePatterns()
   {}
   string formula(unsigned t, set<string> from, set<string> from_named) const;
-  string schemaFormula(unsigned t) const;
+  string schemaFormula(unsigned t, bool axioms) const;
   Pattern* normalize1();
   Pattern* normalize();
 };
@@ -190,7 +190,7 @@ public:
     //NOTHING
   }
   string formula(unsigned t, set<string> from, set<string> from_named) const;
-  string schemaFormula(unsigned t) const;
+  string schemaFormula(unsigned t, bool axioms) const;
   void setQuery(Query* q) {
     _qp = q;
   }
@@ -229,7 +229,7 @@ public:
     }
   }
   string formula(unsigned t, set<string> from, set<string> from_named) const;
-  string schemaFormula(unsigned t) const {
+  string schemaFormula(unsigned t, bool axioms) const {
     //Should not happen
     return "";
   }
@@ -281,7 +281,7 @@ class Expression : public Pattern {
 public:
   virtual string getString() const = 0;
   virtual string prepareString(int i, map<string, string> p) = 0;
-  string schemaFormula(unsigned t) const {
+  string schemaFormula(unsigned t, bool axioms) const {
     throw "Schema cannot have expressions";
   }
   string formula(unsigned t, set<string> from, set<string> from_named) const {
@@ -461,14 +461,21 @@ public:
   Query(map<string, string> m, vector<Expression*> v, Pattern* p, bool d = false, vector<pair<RDFValue *, bool>> vpvb = vector<pair<RDFValue *, bool>>(), pair<set<string>, set<string> > f = pair<set<string>, set<string> >(set<string>(), set<string>()), int l = -1, int o = -1, RDFValue* var = nullptr, vector<RDFValue*> values = vector<RDFValue*>())
     :_prefixes(m), _projections(v), _pattern(p), _distinct(d), _order_by(vpvb), _from(f.first), _from_named(f.second), _limit(l), _offset(o), _var(var), _values(values)
   {
+    _prefixes_abrv["<http://www.w3.org/2000/01/rdf-schema#>"] = "<p0_>";
+    _prefixes_abrv["<http://www.w3.org/1999/02/22-rdf-syntax-ns#>"] = "<p_>";
+    
     for (auto a : _prefixes) {
-      if (_prefixes_abrv[a.second] == "")
-	_prefixes_abrv[a.second] = "<p" + to_string(_prefixes_abrv.size()) + "_>";
+      if (_prefixes_abrv[a.second] == "") {
+	_prefixes_abrv[a.second] = "<p" + to_string(_prefixes_abrv.size()-2) + "_>";
+	//cout << a.second << " - " << _prefixes_abrv[a.second] << endl;
+      }
     }
     _id = _number_of_queries++;
 
-    for (auto a : _prefixes)
+    for (auto a : _prefixes) {
       _prefixes_new[a.first] = _prefixes_abrv[a.second];
+      //cout << a.first << " - " << _prefixes_new[a.first] << endl;
+    }
     _prefixes_new.insert(_prefixes_abrv.begin(), _prefixes_abrv.end());
     
     for (auto a : _projections)
@@ -525,7 +532,7 @@ public:
     delete _pattern;
   }
   string formula(unsigned t) const;
-  string schemaFormula(unsigned t) const;
+  string schemaFormula(unsigned t, bool axioms = true) const;
   vector<Expression*> getProjections() const {
     return _projections;
   }
@@ -642,7 +649,7 @@ public:
     _idOuterQuery = i;
   }
   string formula(unsigned t, set<string> from, set<string> from_named) const;
-  string schemaFormula(unsigned t) const {
+  string schemaFormula(unsigned t, bool axioms) const {
     //Should not happen
     return "";
   }
@@ -690,7 +697,7 @@ public:
     // NOTHING
   }
   string formula(unsigned t, set<string> from, set<string> from_named) const;
-  string schemaFormula(unsigned t) const {
+  string schemaFormula(unsigned t, bool axioms) const {
     //Should not happen
     return "";
   }
