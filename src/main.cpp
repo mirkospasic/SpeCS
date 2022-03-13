@@ -53,6 +53,7 @@ int main(int argc, char **argv) {
   bool rename = false;
   bool qc_strict = false;
   bool eq_check = false;
+  bool axiomatic_triples = false;
   
   extern FILE* yyin;
   if ((argc >= 3) && (string("-file") == argv[1])) {
@@ -66,11 +67,15 @@ int main(int argc, char **argv) {
       rename = true;
     else if (argc > 5 && (string("-rename") == argv[5]))
       rename = true;
+    else if (argc > 6 && (string("-rename") == argv[6]))
+      rename = true;
     if (argc > 3 && (string("-qc") == argv[3]))
       qc_strict = true;
     else if (argc > 4 && (string("-qc") == argv[4]))
       qc_strict = true;
     else if (argc > 5 && (string("-qc") == argv[5]))
+      qc_strict = true;
+    else if (argc > 6 && (string("-qc") == argv[6]))
       qc_strict = true;
     if (argc > 3 && (string("-eq") == argv[3]))
       eq_check = true;
@@ -78,6 +83,16 @@ int main(int argc, char **argv) {
       eq_check = true;
     else if (argc > 5 && (string("-eq") == argv[5]))
       eq_check = true;
+    else if (argc > 6 && (string("-eq") == argv[6]))
+      eq_check = true;
+    if (argc > 3 && (string("-axiomatic") == argv[3]))
+      axiomatic_triples = true;
+    else if (argc > 4 && (string("-axiomatic") == argv[4]))
+      axiomatic_triples = true;
+    else if (argc > 5 && (string("-axiomatic") == argv[5]))
+      axiomatic_triples = true;
+    else if (argc > 6 && (string("-axiomatic") == argv[6]))
+      axiomatic_triples = true;
   }
   else {
     int arg_no = 1;
@@ -117,6 +132,10 @@ int main(int argc, char **argv) {
       else if (argv[arg_no] == string("-eq")) {
 	arg_no++;
 	eq_check = true;
+      }
+      else if (argv[arg_no] == string("-axiomatic")) {
+	arg_no++;
+	axiomatic_triples = true;
       }
       else {
 	cerr << "Unknown argument" << argv[arg_no] << endl;
@@ -333,6 +352,42 @@ int main(int argc, char **argv) {
       if (schema != nullptr) {
 	schemaIRIs = schema->allIRIs();
 	schemaIRIs.insert("<a>");
+	if (axiomatic_triples) {
+	  schemaIRIs.insert("<p0_Class>");
+	  schemaIRIs.insert("<p0_Container>");
+	  schemaIRIs.insert("<p0_ContainerMembershipProperty>");
+	  schemaIRIs.insert("<p0_Datatype>");
+	  schemaIRIs.insert("<p0_Literal>");
+	  schemaIRIs.insert("<p0_Resource>");
+	  schemaIRIs.insert("<p0_Resourse>");
+	  schemaIRIs.insert("<p0_comment>");
+	  schemaIRIs.insert("<p0_domain>");
+	  schemaIRIs.insert("<p0_isDefinedBy>");
+	  schemaIRIs.insert("<p0_label>");
+	  schemaIRIs.insert("<p0_member>");
+	  schemaIRIs.insert("<p0_range>");
+	  schemaIRIs.insert("<p0_seeAlso>");
+	  schemaIRIs.insert("<p0_subClassOf>");
+	  schemaIRIs.insert("<p0_subPropertyOf>");
+	  schemaIRIs.insert("<p1_headOf>");
+	  schemaIRIs.insert("<p1_maleHeadOf>");
+	  schemaIRIs.insert("<p_Alt>");
+	  schemaIRIs.insert("<p_Bag>");
+	  schemaIRIs.insert("<p_List>");
+	  schemaIRIs.insert("<p_Property>");
+	  schemaIRIs.insert("<p_Seq>");
+	  schemaIRIs.insert("<p_Statement>");
+	  schemaIRIs.insert("<p_XMLLiteral>");
+	  schemaIRIs.insert("<p__1>");
+	  schemaIRIs.insert("<p__2>");
+	  schemaIRIs.insert("<p_first>");
+	  schemaIRIs.insert("<p_object>");
+	  schemaIRIs.insert("<p_predicate>");
+	  schemaIRIs.insert("<p_rest>");
+	  schemaIRIs.insert("<p_subject>");
+	  schemaIRIs.insert("<p_type>");
+	  schemaIRIs.insert("<p_value>");
+	}
 	iris.insert(schemaIRIs.begin(), schemaIRIs.end());
       }
       for (auto a : subQuery1->getFrom())
@@ -394,6 +449,59 @@ int main(int argc, char **argv) {
 	output << tabs(2) + "(forall ((s RDFValue)(p RDFValue)(o RDFValue)(g RDFValue)) (=> (P s p o g) (P o <a> <p0_Resourse> g)))" << endl;
 	output << "\t)" << endl;
 	output << ")" << endl << endl;
+	if (axiomatic_triples) {
+	  output << "(assert " << endl;
+	  output << "\t(and " << endl;
+	  output << tabs(2) + "(P <p1_maleHeadOf> <p0_subPropertyOf> <p1_headOf> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_type> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_domain> <p0_domain> <p_Property> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_range> <p0_domain> <p_Property> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_subPropertyOf> <p0_domain> <p_Property> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_subClassOf> <p0_domain> <p0_Class> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_subject> <p0_domain> <p_Statement> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_predicate> <p0_domain> <p_Statement> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_object> <p0_domain> <p_Statement> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_member> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_first> <p0_domain> <p_List> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_rest> <p0_domain> <p_List> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_seeAlso> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_isDefinedBy> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_comment> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_label> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_value> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_type> <p0_range> <p0_Class> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_domain> <p0_range> <p0_Class> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_range> <p0_range> <p0_Class> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_subPropertyOf> <p0_range> <p_Property> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_subClassOf> <p0_range> <p0_Class> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_subject> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_predicate> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_object> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_member> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_first> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_rest> <p0_range> <p_List> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_seeAlso> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_isDefinedBy> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_comment> <p0_range> <p0_Literal> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_label> <p0_range> <p0_Literal> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_value> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_Alt> <p0_subClassOf> <p0_Container> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_Bag> <p0_subClassOf> <p0_Container> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_Seq> <p0_subClassOf> <p0_Container> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_ContainerMembershipProperty> <p0_subClassOf> <p_Property> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_isDefinedBy> <p0_subPropertyOf> <p0_seeAlso> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_XMLLiteral> <p_type> <p0_Datatype> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p_XMLLiteral> <p0_subClassOf> <p0_Literal> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p0_Datatype> <p0_subClassOf> <p0_Class> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p__1> <p_type> <p0_ContainerMembershipProperty> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p__1> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p__1> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p__2> <p_type> <p0_ContainerMembershipProperty> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p__2> <p0_domain> <p0_Resource> <default_graph>)" << endl; 
+	  output << tabs(2) + "(P <p__2> <p0_range> <p0_Resource> <default_graph>)" << endl; 
+	  output << "\t)" << endl;
+	  output << ")" << endl << endl;
+	}
       }
       
       output << "; ------------ Variables ----------------------------" << endl;
