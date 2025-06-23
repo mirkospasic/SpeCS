@@ -263,8 +263,8 @@ int main(int argc, char **argv) {
   
   for (unsigned union_i = 0; union_i < subQuery->numberOfConjuctive(); union_i++) {
     bool ok = false;
-    bool check_unsatisfiability_of_q1 = false;
     for (unsigned union_j = 0; union_j < superQuery->numberOfConjuctive(); union_j++) {
+      bool check_unsatisfiability_of_q1 = false;
       //cout << union_i << " " << union_j << endl;
       
       Query* subQuery1 = subQuery->i_th_query(union_i);
