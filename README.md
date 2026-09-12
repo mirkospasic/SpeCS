@@ -15,6 +15,10 @@ In order to compile SpeCS, the following tools have to be installed (check how t
 - bison
 
 In order to execute SpeCS, Z3 solver has to be installed (https://github.com/Z3Prover/z3).
+SpeCS invokes `z3` from PATH. If Z3 is installed in a location that is not on
+PATH, set the SPECS_Z3 environment variable to the full path of the binary:
+
+> SPECS_Z3=/opt/z3/bin/z3 ./specs -file path_to_file_with_2_sparql_queries
 
 # Building
 > cd src

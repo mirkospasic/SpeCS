@@ -22,6 +22,27 @@ void yyerror(string s) {
   exit(EXIT_FAILURE);
 }
 
+/* Path to the z3 binary. Resolved from PATH by default, and overridable
+   with the SPECS_Z3 environment variable for non-standard installations. */
+string z3Binary() {
+  const char *z3 = getenv("SPECS_Z3");
+  return (z3 != nullptr && z3[0] != '\0') ? string(z3) : string("z3");
+}
+
+/* Wall-clock timeout given to each z3 call, in seconds. Overridable with the
+   SPECS_Z3_TIMEOUT environment variable. */
+string z3Timeout() {
+  const char *timeout = getenv("SPECS_Z3_TIMEOUT");
+  return (timeout != nullptr && timeout[0] != '\0') ? string(timeout) : string("60");
+}
+
+/* Virtual memory limit given to each z3 call, in megabytes. Overridable with
+   the SPECS_Z3_MEMORY environment variable. */
+string z3Memory() {
+  const char *memory = getenv("SPECS_Z3_MEMORY");
+  return (memory != nullptr && memory[0] != '\0') ? string(memory) : string("4096");
+}
+
 /* Function for executing cmd command */
 std::string exec(const char* cmd) {
     std::array<char, 128> buffer;
@@ -263,6 +284,9 @@ int main(int argc, char **argv) {
   
   for (unsigned union_i = 0; union_i < subQuery->numberOfConjuctive(); union_i++) {
     bool ok = false;
+    bool timedOut = false;
+    bool unknown = false;
+    bool outOfMemory = false;
     for (unsigned union_j = 0; union_j < superQuery->numberOfConjuctive(); union_j++) {
       bool check_unsatisfiability_of_q1 = false;
       //cout << union_i << " " << union_j << endl;
@@ -551,12 +575,20 @@ int main(int argc, char **argv) {
       // Measuring times needed for z3
       auto start2 = chrono::high_resolution_clock::now();
       
-      // Execute z3 solver with 60s timeout 
-      string solve = "/home/mirko/Dropbox/sqc/z3/z3-4.4.0-x64-ubuntu-14.04/bin/z3 -T:60 -smt2 " + outputname;
+      // Execute z3 solver with a configurable timeout and memory limit
+      // (SPECS_Z3_TIMEOUT, default 60s; SPECS_Z3_MEMORY, default 4096 MB)
+      string solve = z3Binary() + " -T:" + z3Timeout() + " -memory:" + z3Memory() + " -smt2 " + outputname + " 2>&1";
       string result = exec(solve.c_str());
-      if (result.substr(0, 5) == "unsat")
+      if (result.substr(0, 5) == "unsat") {
 	ok = true;
-      
+      } else if (result.substr(0, 7) == "timeout") {
+	timedOut = true;
+      } else if (result.substr(0, 7) == "unknown") {
+	unknown = true;
+      } else if (result.find("out of memory") != string::npos) {
+	outOfMemory = true;
+      }
+
       // Measuring times needed for z3
       auto end2 = chrono::high_resolution_clock::now();
       dur2 += chrono::duration_cast<std::chrono::nanoseconds>(end2 - start2).count();
@@ -567,8 +599,16 @@ int main(int argc, char **argv) {
       }
     }
     if (!ok) {
-      cout << "sat - " << union_i << endl;
-      goto end;
+      if (timedOut) {
+	cout << "timeout - " << union_i << endl;
+      } else if (unknown) {
+	cout << "unknown - " << union_i << endl;
+      } else if (outOfMemory) {
+	cout << "out of memory - " << union_i << endl;
+      } else {
+	cout << "sat - " << union_i << endl;
+      }
+      return 0;
     }
   }
 
